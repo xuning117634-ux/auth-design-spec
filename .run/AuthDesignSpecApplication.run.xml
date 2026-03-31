@@ -1,0 +1,25 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="AuthDesignSpecApplication" type="MavenRunConfiguration" factoryName="Maven">
+    <MavenSettings>
+      <option name="myGeneralSettings">
+        <MavenGeneralSettings>
+          <option name="mavenHome" value="D:\DevTools\Java\apache-maven-3.9.14" />
+          <option name="mavenHomeTypeForPersistence" value="EXTERNAL" />
+          <option name="userSettingsFile" value="C:\Users\11763\.m2\settings.xml" />
+        </MavenGeneralSettings>
+      </option>
+      <option name="myRunnerParameters">
+        <MavenRunnerParameters>
+          <option name="workingDirPath" value="$PROJECT_DIR$" />
+          <option name="pomFileName" value="pom.xml" />
+          <option name="goals">
+            <list>
+              <option value="spring-boot:run" />
+            </list>
+          </option>
+        </MavenRunnerParameters>
+      </option>
+    </MavenSettings>
+    <method v="2" />
+  </configuration>
+</component>
