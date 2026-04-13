@@ -12,11 +12,12 @@
 - `策略中心` 负责统一维护 `tool <-> policy_code` 映射
 - `IDaaS` 仍然基于 `policy_code` 做登录与授权
 - `IAM` 仍然基于 `Tc + T1` 生成最终可访问资源的 `TR`
-- 资源服务最终仍然只认 `TR`
+- 业务 Agent 带 `TR` 访问 `MCP 网关`
+- `MCP 网关` 基于 `TR` 中的授权 code 映射出允许调用的 `MCP tool`，再路由到对应 `MCP 服务`
 
 一句话总结：
 
-**业务 Agent 面向工具，Agent 网关面向授权流程，策略中心面向 `tool/code` 映射，IDaaS 面向 code 授权，资源服务面向 `TR`。**
+**业务 Agent 面向工具，Agent 网关面向授权流程，策略中心面向 `tool/code` 映射，IDaaS 面向 code 授权，MCP 网关面向 `TR`。**
 
 ---
 
@@ -33,7 +34,7 @@
 | 判断这些工具对应哪些 code | 业务 Agent / 人工约定 | 业务 Agent | **Agent 网关 + 策略中心** |
 | 本地站点登录态 `site_session` | 业务 Agent | 业务 Agent | **业务 Agent** |
 | 本地 `TR` 缓存 | 业务 Agent | 业务 Agent | **业务 Agent** |
-| 带 `TR` 调资源服务 | 业务 Agent | 业务 Agent | **业务 Agent** |
+| 带 `TR` 调 `MCP 网关` | 业务 Agent | 业务 Agent | **业务 Agent** |
 
 这版最关键的变化只有一条：
 
@@ -51,7 +52,8 @@ flowchart LR
     PC["策略中心<br/>tool/code 映射"]
     I["IDaaS"]
     IAM["IAM<br/>T1 / TR"]
-    R["资源服务<br/>API / MCP"]
+    R["MCP 网关<br/>code/tool 映射 + 路由"]
+    S["MCP 服务<br/>具体工具实现"]
 
     U <--> A
     U <--> GW
@@ -60,6 +62,7 @@ flowchart LR
     GW <--> I
     GW <--> IAM
     A --> R
+    R --> S
 ```
 
 这张图表达的是：
@@ -68,7 +71,9 @@ flowchart LR
 - 业务 Agent 不再直连 `IDaaS / IAM`
 - 业务 Agent 只向网关提交 `required_tools`
 - 网关通过策略中心把工具需求翻译成授权 code
-- 业务 Agent 拿到 `TR` 后本地缓存，直接调用资源服务
+- 业务 Agent 拿到 `TR` 后本地缓存，直接调用 `MCP 网关`
+- `MCP 网关` 基于 `TR` 中的授权 code 反查允许访问的 `MCP tool`
+- `MCP 网关` 再路由到对应 `MCP 服务`
 - 网关不代理业务资源流量
 
 ---
@@ -250,15 +255,18 @@ sequenceDiagram
     participant PC as 策略中心
     participant IDaaS as IDaaS
     participant IAM as IAM
-    participant 资源服务 as 资源服务 / MCP
+    participant MCP网关 as MCP 网关
+    participant MCP服务 as MCP 服务
 
     用户->>Agent: POST /chat/send（"分析12月财报"）
     Agent->>Agent: 判断本次请求需要哪些 MCP tools
     Agent->>Agent: 检查本地 TR 缓存是否覆盖这组工具
 
     alt 本地已有可复用 TR
-        Agent->>资源服务: 带 TR 调资源
-        资源服务-->>Agent: 返回数据
+        Agent->>MCP网关: 带 TR 调 MCP
+        MCP网关->>MCP服务: 按 code 映射允许工具并路由调用
+        MCP服务-->>MCP网关: 返回工具结果
+        MCP网关-->>Agent: 返回数据
         Agent-->>用户: 返回答案
     else 本地没有可复用 TR
         Agent->>GW: POST /gw/token/resource-token {agent_id, required_tools, return_url, state}
@@ -270,8 +278,10 @@ sequenceDiagram
         alt 网关已有可用 TR
             GW-->>Agent: 200 {access_token: TR, expires_in: 3600}
             Agent->>Agent: 写入本地 TR 缓存
-            Agent->>资源服务: 带 TR 调资源
-            资源服务-->>Agent: 返回数据
+            Agent->>MCP网关: 带 TR 调 MCP
+            MCP网关->>MCP服务: 按 code 映射允许工具并路由调用
+            MCP服务-->>MCP网关: 返回工具结果
+            MCP网关-->>Agent: 返回数据
             Agent-->>用户: 返回答案
         else 网关缺少授权
             GW->>GW: 记录 pending_auth_transaction {required_tools, required_policy_codes, ...}
@@ -301,8 +311,10 @@ sequenceDiagram
             Agent->>GW: POST /gw/token/resource-token {agent_id, required_tools, return_url, state}
             GW-->>Agent: 200 {access_token: TR, expires_in: 3600}
             Agent->>Agent: 写入本地 TR 缓存
-            Agent->>资源服务: 带 TR 调资源
-            资源服务-->>Agent: 返回数据
+            Agent->>MCP网关: 带 TR 调 MCP
+            MCP网关->>MCP服务: 按 code 映射允许工具并路由调用
+            MCP服务-->>MCP网关: 返回工具结果
+            MCP网关-->>Agent: 返回数据
             Agent-->>用户: 返回答案
         end
     end
@@ -326,10 +338,10 @@ sequenceDiagram
 1. 检查是否已有本地 `site_session`
 2. 如果没有，302 到网关 `GET /gw/auth/login`
 3. base 登录完成后，在页面入口 handler 中接收：
-   - `gw_session_token`
-   - `user_id`
-   - `username`
-   - `state`
+    - `gw_session_token`
+    - `user_id`
+    - `username`
+    - `state`
 4. 校验 `state`
 5. 创建本地 `site_session`
 6. 302 到干净 URL
@@ -352,7 +364,7 @@ sequenceDiagram
 然后：
 
 1. 先看本地 `TR` 缓存能不能覆盖这组工具
-2. 能覆盖就直接带 `TR` 调资源服务
+2. 能覆盖就直接带 `TR` 调 `MCP 网关`
 3. 不能覆盖就向网关发起：
 
 ```http
@@ -523,14 +535,14 @@ POST /internal/v1/policies/resolve-by-tools
 ### 8.1 业务 Agent ↔ Agent 网关
 
 - `POST /gw/token/resource-token`
-  - 输入：`agent_id + required_tools + return_url + state`
-  - 输出：`TR` 或 `redirect_url`
+    - 输入：`agent_id + required_tools + return_url + state`
+    - 输出：`TR` 或 `redirect_url`
 
 ### 8.2 Agent 网关 ↔ 策略中心
 
 - `POST /internal/v1/policies/resolve-by-tools`
-  - 输入：`agent_id + required_tools`
-  - 输出：`required_policy_codes + policy_items`
+    - 输入：`agent_id + required_tools`
+    - 输出：`required_policy_codes + policy_items`
 
 ### 8.3 浏览器 ↔ Agent 网关
 
@@ -542,20 +554,22 @@ POST /internal/v1/policies/resolve-by-tools
 ### 8.4 Agent 网关 ↔ IDaaS
 
 - `GET /authorize`
-  - base 登录时：`scope=base`
-  - 业务授权时：`scope=<required_policy_codes>`
+    - base 登录时：`scope=base`
+    - 业务授权时：`scope=<required_policy_codes>`
 - `POST /oauth2/token`
-  - 用授权码换基础登录结果或 `Tc`
+    - 用授权码换基础登录结果或 `Tc`
 
 ### 8.5 Agent 网关 ↔ IAM
 
 - `POST /iam/projects/{proxy_project_id}/assume_agent_token`
 - `POST /iam/auth/resource-token`
 
-### 8.6 业务 Agent ↔ 资源服务
+### 8.6 业务 Agent ↔ MCP 网关 / MCP 服务
 
-- 资源服务接口只接受 `TR`
-- 与 phase2 保持一致
+- 业务 Agent 带 `TR` 调 `MCP 网关`
+- `MCP 网关` 基于 `TR` 中的授权 code 反查允许访问的 `MCP tool`
+- `MCP 网关` 再路由到对应 `MCP 服务`
+- `MCP 服务` 执行具体工具逻辑并返回结果
 
 ---
 
@@ -669,7 +683,8 @@ sequenceDiagram
     participant 策略中心
     participant IDaaS
     participant IAM
-    participant 资源服务
+    participant MCP网关
+    participant MCP服务
 
     用户->>业务Agent: 打开页面
     业务Agent->>Agent网关: 302 到 /gw/auth/login
@@ -706,8 +721,10 @@ sequenceDiagram
     业务Agent->>Agent网关: POST /gw/token/resource-token
     Agent网关-->>业务Agent: 200 {access_token: TR}
     业务Agent->>业务Agent: 缓存 TR
-    业务Agent->>资源服务: 带 TR 调资源
-    资源服务-->>业务Agent: 返回结果
+    业务Agent->>MCP网关: 带 TR 调 MCP
+    MCP网关->>MCP服务: 按 code 映射允许工具并路由调用
+    MCP服务-->>MCP网关: 返回结果
+    MCP网关-->>业务Agent: 返回结果
     业务Agent-->>用户: 返回答案
 ```
 
@@ -728,6 +745,6 @@ sequenceDiagram
 1. 第三阶段最终方案里，业务 Agent 不再理解 `scope/code`，只理解本次请求需要哪些 `MCP tool`
 2. `tool -> code` 的翻译全部收敛到 `Agent 网关 + 策略中心`
 3. 对 IDaaS 来说，授权对象仍然是 `policy_code`，这一点不变
-4. 对 IAM 和资源服务来说，最终仍然只认 `Tc / T1 / TR` 三令牌模型和最终 `TR`
+4. 对 IAM 和 `MCP 网关` 来说，最终仍然只认 `Tc / T1 / TR` 三令牌模型和最终 `TR`
 5. 对业务 Agent 来说，真正新增且长期对接的核心接口只有 `POST /gw/token/resource-token`
 6. **业务 Agent 轻，Agent 网关重，策略中心负责语言转换，这才是这版方案的核心结构**
