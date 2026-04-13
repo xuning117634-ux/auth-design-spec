@@ -1,10 +1,10 @@
-# 第三阶段最终方案：引入 Agent 网关 + 策略中心，按工具申请 `TR`
+# 引入 Agent 网关最终方案：引入 Agent 网关 + 策略中心，按工具申请 `TR`
 
 ---
 
 ## 1. 目标
 
-这一版方案在上一版 phase3 的基础上，再补上一个关键约束：
+这一版方案在引入 Agent 网关的基础上，再补上一个关键约束：
 
 - 业务 Agent **不知道权限 code 长什么样**
 - 业务 Agent 只知道：自己这次要调用哪些 `MCP tool`
@@ -23,7 +23,7 @@
 
 ## 2. 核心分工变化
 
-| 职责 | phase2 归属 | 旧 phase3 归属 | 最终 phase3 归属 |
+| 职责 | 01_无Agent网关版方案归属 | 02_引入Agent网关版方案归属 | 当前归属 |
 |---|---|---|---|
 | OAuth2 redirect / callback | 业务 Agent | Agent 网关 | **Agent 网关** |
 | code 换 `Tc` | 业务 Agent | Agent 网关 | **Agent 网关** |
@@ -205,7 +205,7 @@ gw_state / request_id ->
 
 ```mermaid
 sequenceDiagram
-    title Phase3 最终方案：base 登录（网关完成后直接返回 gw_session_token）
+    title 引入 Agent 网关最终方案：base 登录（网关完成后直接返回 gw_session_token）
     participant 用户 as 用户浏览器
     participant Agent as 业务 Agent
     participant GW as Agent 网关
@@ -242,13 +242,13 @@ sequenceDiagram
     end
 ```
 
-这一段和上一版 phase3 基本一致，变化不大。
+这一段主要描述基础登录闭环，与下文业务授权链路相比变化较小。
 
 ### 5.2 业务授权 + 获取 `TR` 阶段
 
 ```mermaid
 sequenceDiagram
-    title Phase3 最终方案：按工具申请 TR（Agent 上传 required_tools）
+    title 引入 Agent 网关最终方案：按工具申请 TR（Agent 上传 required_tools）
     participant 用户 as 用户浏览器
     participant Agent as 业务 Agent
     participant GW as Agent 网关
@@ -346,7 +346,7 @@ sequenceDiagram
 5. 创建本地 `site_session`
 6. 302 到干净 URL
 
-这部分和旧 phase3 一样，不需要新增 callback 接口。
+这部分保持不变，不需要新增 callback 接口。
 
 ### 6.2 用户发起资源请求时
 
