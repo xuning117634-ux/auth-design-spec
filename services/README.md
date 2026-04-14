@@ -8,61 +8,6 @@
 
 ## 1. 先让 IDEA 正确识别项目
 
-如果你直接打开仓库根目录，发现：
-
-- `src/main/java` 没有变成蓝色
-- `src/test/java` 没有变成绿色
-- `resources` 没有被识别成资源目录
-- Maven 依赖树没有正常出现
-
-通常不是代码有问题，而是 **IDEA 还没有把 `services` 下面的 3 个子工程导入成 Maven module**。
-
-### 1.1 为什么会这样
-
-当前仓库根目录的 `pom.xml` 不是一个已经整理好的 Maven 聚合父工程，所以 IDEA 直接打开根目录时，不一定会自动把下面这些服务识别成模块：
-
-- `services/agent-gateway`
-- `services/policy-center`
-- `services/demo-business-agent`
-
-### 1.2 正确导入方式
-
-在 IDEA 里按下面步骤操作：
-
-1. 打开右侧 `Maven` 工具窗口
-2. 点击 `+` 或 `Add Maven Projects`
-3. 依次选择这 3 个 `pom.xml`
-   - `services/agent-gateway/pom.xml`
-   - `services/policy-center/pom.xml`
-   - `services/demo-business-agent/pom.xml`
-4. 导入完成后，点击一次 `Reload All Maven Projects`
-
-### 1.3 导入成功后你会看到什么
-
-导入成功后，一般会出现这些效果：
-
-- `src/main/java` 变成蓝色
-- `src/test/java` 变成绿色
-- `src/main/resources` 被识别成资源目录
-- 每个服务都能在 IDEA 里作为独立 Maven module 运行
-
-### 1.4 如果还没有颜色
-
-可以再检查这几件事：
-
-- 右键对应目录，看是否被错误标成普通目录
-- 在 `Project Structure -> Modules` 中确认模块是否已经出现
-- 在 Maven 工具窗口重新 `Reload`
-- 必要时关闭项目后重新打开
-
-### 1.5 推荐做法
-
-建议以后始终把下面这 3 个 `pom.xml` 当作实际可运行模块：
-
-- `services/agent-gateway/pom.xml`
-- `services/policy-center/pom.xml`
-- `services/demo-business-agent/pom.xml`
-
 ## 2. 启动顺序
 
 建议按下面顺序启动：
@@ -79,7 +24,7 @@
 cd D:\IDEA_Project\init_env\auth-design-spec\services\policy-center
 mvn spring-boot:run
 ```
-
+或手动点击　IDEA　启动
 默认端口：`18081`
 
 ### 3.2 启动 Agent 网关
