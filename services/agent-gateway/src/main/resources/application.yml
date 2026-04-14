@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: agent-gateway
+  profiles:
+    default: mock
+
+server:
+  port: 18080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+gateway:
+  self-base-url: http://localhost:${server.port}
+  secure-cookies: false
+  jwt-secret: changeit-changeit-changeit
+  default-user-id: z01062668
+  default-username: demo.user
+
+clients:
+  policy-center:
+    base-url: http://localhost:18081
+
+providers:
+  idaas:
+    authorize-url: http://localhost:${server.port}/mock/idaas/authorize
+    token-url: http://localhost:${server.port}/mock/idaas/oauth2/token
+    client-id: agent_gateway_client
+  iam:
+    base-url: http://localhost:${server.port}/mock/iam
+    proxy-project-id: proxy_project_001
+
+agent-registry:
+  entries:
+    - agent-id: agt_business_001
+      agent-name: business-data-assistant
+      agent-service-account: svc_ai_business_agent
+      principal: com.huawei.business.agent
+      subscribed-tools:
+        - mcp:financial-report-server/query_monthly_report
+        - mcp:financial-report-server/list_report_categories
+        - mcp:invoice-server/query_invoices
+      allowed-return-hosts:
+        - localhost
+        - 127.0.0.1

@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: policy-center
+
+server:
+  port: 18081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+policy-center:
+  catalog:
+    policies:
+      - code: erp:report:read
+        display-name: Read report data
+      - code: erp:report:category:list
+        display-name: List report categories
+      - code: erp:invoice:read
+        display-name: Read invoice data
+    tools:
+      - id: mcp:financial-report-server/query_monthly_report
+        display-name: Query monthly report
+      - id: mcp:financial-report-server/list_report_categories
+        display-name: List report categories
+      - id: mcp:invoice-server/query_invoices
+        display-name: Query invoices
+    mappings:
+      - tool-id: mcp:financial-report-server/query_monthly_report
+        policy-code: erp:report:read
+      - tool-id: mcp:financial-report-server/list_report_categories
+        policy-code: erp:report:category:list
+      - tool-id: mcp:invoice-server/query_invoices
+        policy-code: erp:invoice:read

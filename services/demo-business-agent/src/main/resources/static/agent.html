@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>业务 Agent 演示页面</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f6f8fb; color: #1f2937; }
+    .shell { max-width: 900px; margin: 48px auto; background: white; border-radius: 16px; box-shadow: 0 12px 32px rgba(0,0,0,0.08); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #145cff, #0ea5e9); color: white; padding: 24px 28px; }
+    .content { padding: 24px 28px 32px; }
+    textarea { width: 100%; min-height: 120px; border: 1px solid #d1d5db; border-radius: 12px; padding: 14px; font-size: 14px; box-sizing: border-box; }
+    button { margin-top: 16px; border: none; background: #145cff; color: white; padding: 12px 18px; border-radius: 10px; cursor: pointer; font-size: 14px; }
+    .hint { color: #6b7280; font-size: 13px; margin-top: 12px; }
+    .result { margin-top: 24px; border-radius: 12px; background: #f8fafc; border: 1px solid #e5e7eb; padding: 16px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="header">
+      <h1>业务 Agent 演示页面</h1>
+      <div>你可以试试这样的问题：“分析本月财报”或“查询发票明细”</div>
+    </div>
+    <div class="content">
+      <textarea id="message" placeholder="请输入需要财报或发票工具支持的问题..."></textarea>
+      <button id="sendButton">发送</button>
+      <div class="hint">页面在跳转到 Agent 网关前，会先把当前消息保存在 sessionStorage 中。</div>
+      <div id="result" class="result">等待你的消息...</div>
+    </div>
+  </div>
+
+  <script>
+    const messageInput = document.getElementById("message");
+    const sendButton = document.getElementById("sendButton");
+    const resultBox = document.getElementById("result");
+    const sourceLabels = {
+      local: "本地回答",
+      cache: "本地缓存",
+      gateway: "网关新取令牌"
+    };
+
+    async function sendMessage(message) {
+      resultBox.textContent = "处理中...";
+      const response = await fetch("/chat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+      });
+
+      if (!response.ok) {
+        resultBox.textContent = "请求失败，状态码：" + response.status;
+        return;
+      }
+
+      const payload = await response.json();
+      if (payload.status === "redirect") {
+        sessionStorage.setItem("pending:" + payload.state, message);
+        window.location.href = payload.redirectUrl;
+        return;
+      }
+
+      const sourceLabel = sourceLabels[payload.source] || payload.source;
+      resultBox.textContent = "[" + sourceLabel + "] " + payload.answer;
+    }
+
+    async function recoverMessageIfNeeded() {
+      const params = new URLSearchParams(window.location.search);
+      const state = params.get("state");
+      if (!state) {
+        return;
+      }
+      const key = "pending:" + state;
+      const pendingMessage = sessionStorage.getItem(key);
+      if (!pendingMessage) {
+        return;
+      }
+      sessionStorage.removeItem(key);
+      history.replaceState({}, "", "/agent.html");
+      messageInput.value = pendingMessage;
+      await sendMessage(pendingMessage);
+    }
+
+    sendButton.addEventListener("click", async () => {
+      const message = messageInput.value.trim();
+      if (!message) {
+        resultBox.textContent = "请先输入问题。";
+        return;
+      }
+      await sendMessage(message);
+    });
+
+    recoverMessageIfNeeded();
+  </script>
+</body>
+</html>
