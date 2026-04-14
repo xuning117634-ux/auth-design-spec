@@ -1,4 +1,4 @@
-# 文档总览
+﻿# 文档总览
 
 这份目录已经按统一阅读主线整理。
 
@@ -20,6 +20,8 @@
    默认方案的接口与模块交互入口
 7. [06_模块接口总表.md](/D:/IDEA_Project/init_env/auth-design-spec/docs/design/06_模块接口总表.md)
    适合评审的一页版模块接口总览
+8. [07_30分钟评审发言稿.md](/D:/IDEA_Project/init_env/auth-design-spec/docs/design/07_30分钟评审发言稿.md)
+   适合接口评审会直接使用
 
 ## 关键口径
 
@@ -30,3 +32,5 @@
 - Web Agent 场景下，需要区分：
   - 站点登录
   - Agent 代表用户访问资源的认证授权
+
+

@@ -1,4 +1,4 @@
-##说明
+﻿##说明
 基于java：
 <dependency>
 
@@ -263,3 +263,5 @@ POST /iam/auth/resource-token
 | path      | String | 原请求uri                   |
 | title     | String | 错误标题                    |
 | errors    | Array  | 错误信息                    |
+
+

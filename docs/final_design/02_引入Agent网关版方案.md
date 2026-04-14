@@ -2,6 +2,8 @@
 
 ---
 
+`01` 为参考方案，`02/03/04` 为当前正式方案。
+
 ## 1. 目标
 
 这一版方案在引入 Agent 网关的基础上，再补上一个关键约束：
@@ -13,11 +15,11 @@
 - `IDaaS` 仍然基于 `policy_code` 做登录与授权
 - `IAM` 仍然基于 `Tc + T1` 生成最终可访问资源的 `TR`
 - 业务 Agent 带 `TR` 访问 `MCP 网关`
-- `MCP 网关` 基于 `TR` 中的授权 code 映射出允许调用的 `MCP tool`，再路由到对应 `MCP 服务`
+- `MCP 网关` 运行时查询策略中心，把 `TR` 中的授权 code 映射成允许调用的 `MCP tool`，再路由到对应 `MCP 服务`
 
 一句话总结：
 
-**业务 Agent 面向工具，Agent 网关面向授权流程，策略中心面向 `tool/code` 映射，IDaaS 面向 code 授权，MCP 网关面向 `TR`。**
+**业务 Agent 面向工具，Agent 网关面向 `tool -> code`，策略中心是映射权威源，IDaaS 面向 code 授权，MCP 网关面向 `TR` 并在运行时完成 `code -> tool`。**
 
 ---
 
@@ -52,7 +54,7 @@ flowchart LR
     PC["策略中心<br/>tool/code 映射"]
     I["IDaaS"]
     IAM["IAM<br/>T1 / TR"]
-    R["MCP 网关<br/>code/tool 映射 + 路由"]
+R["MCP 网关<br/>运行时 code/tool 映射 + 路由"]
     S["MCP 服务<br/>具体工具实现"]
 
     U <--> A
@@ -72,7 +74,7 @@ flowchart LR
 - 业务 Agent 只向网关提交 `required_tools`
 - 网关通过策略中心把工具需求翻译成授权 code
 - 业务 Agent 拿到 `TR` 后本地缓存，直接调用 `MCP 网关`
-- `MCP 网关` 基于 `TR` 中的授权 code 反查允许访问的 `MCP tool`
+- `MCP 网关` 运行时查询策略中心，基于 `TR` 中的授权 code 反查允许访问的 `MCP tool`
 - `MCP 网关` 再路由到对应 `MCP 服务`
 - 网关不代理业务资源流量
 
@@ -176,12 +178,28 @@ value: consented_policy_codes, tc, t1, tr, expires_at
 
 这里保存的是 code 视角的授权事实，不再保存“业务 Agent 自己传上来的 scope”。
 
-### 4.6 pending_auth_transaction（临时状态，用后即删）
+### 4.6 pending_base_login（临时状态，用后即删）
 
-OAuth2 重定向过程中暂存：
+base 登录重定向期间暂存：
 
 ```text
-gw_state / request_id ->
+gw_state ->
+  agent_id,
+  return_url,
+  outer_state
+```
+
+它的作用是：
+
+- 仅用于 `base` 登录阶段
+- 让 `/gw/auth/base/callback` 能通过 `gw_state` 恢复登录前上下文
+
+### 4.7 pending_auth_transaction（临时状态，用后即删）
+
+业务授权与获取 `TR` 流程中暂存：
+
+```text
+request_id ->
   agent_id,
   required_tools,
   required_policy_codes,
@@ -191,8 +209,16 @@ gw_state / request_id ->
   outer_state
 ```
 
+同时，网关在 OAuth2 跳转期间内部维护临时关联：
+
+```text
+gw_state -> request_id
+```
+
 它的作用是：
 
+- `request_id` 作为业务 Agent 与网关之间的外部恢复依据
+- `gw_state` 只用于网关和 IDaaS callback 之间的内部恢复
 - 把“这次业务请求到底需要哪些工具”带过重定向流程
 - 把“这些工具对应哪些 code”固定下来
 - 回调后继续完成 `Tc / T1 / TR` 编排
@@ -218,7 +244,7 @@ sequenceDiagram
         Agent-->>用户: 302 → /gw/auth/login?agent_id=agt_001&return_url=https://agent/agent&state=xyz
         用户->>GW: GET /gw/auth/login
         GW->>GW: 校验 agent_id，校验 return_url host
-        GW->>GW: 记录 pending_auth_transaction
+        GW->>GW: 记录 pending_base_login
         GW-->>用户: 302 → IDaaS /authorize?scope=base...
 
         用户->>IDaaS: GET /authorize?scope=base...
@@ -427,7 +453,7 @@ Authorization: Bearer <gw_session_token>
 - 校验 `agent_id`
 - 校验 `return_url` host 是否在白名单里
 - 生成内部 `gw_state`
-- 写入 `pending_auth_transaction`
+- 写入 `pending_base_login`
 - 302 到 IDaaS `scope=base` 的 `/authorize`
 
 ### 7.2 登录回调 `/gw/auth/base/callback`
@@ -567,7 +593,7 @@ POST /internal/v1/policies/resolve-by-tools
 ### 8.6 业务 Agent ↔ MCP 网关 / MCP 服务
 
 - 业务 Agent 带 `TR` 调 `MCP 网关`
-- `MCP 网关` 基于 `TR` 中的授权 code 反查允许访问的 `MCP tool`
+- `MCP 网关` 运行时查询策略中心，基于 `TR` 中的授权 code 反查允许访问的 `MCP tool`
 - `MCP 网关` 再路由到对应 `MCP 服务`
 - `MCP 服务` 执行具体工具逻辑并返回结果
 
@@ -611,21 +637,32 @@ gw_session_id -> user_id, username, created_at
 - 后续直接返回 `TR`
 - 后续做透明续期
 
-#### `pending_auth_transaction`
+#### `pending_base_login`
 
 ```text
-gw_state / request_id ->
-  agent_id,
-  required_tools,
-  required_policy_codes,
-  missing_policy_codes,
-  return_url,
-  gw_session_id,
-  outer_state
+gw_state -> agent_id, return_url, outer_state
 ```
 
 用途：
 
+- 仅用于 `base` 登录阶段回调恢复
+
+#### `pending_auth_transaction`
+
+```text
+request_id -> agent_id, required_tools, required_policy_codes, missing_policy_codes, return_url, gw_session_id, outer_state
+```
+
+同时，网关内部维护：
+
+```text
+gw_state -> request_id
+```
+
+用途：
+
+- 对外恢复依据是 `request_id`
+- 内部 callback 关联依据是 `gw_state`
 - OAuth2 跳转期间关联这次请求上下文
 - 保证回调后还能恢复“工具需求 -> 授权 code -> 最终 TR”这条链路
 
@@ -644,19 +681,15 @@ site_session_id -> gw_session_token, user_id, username
 #### `tr_cache`
 
 ```text
-(agent_id + required_tools_hash) -> tr, expires_at
-```
-
-或：
-
-```text
-agent_id -> tr, covered_tools / covered_policy_codes, expires_at
+(site_session_id + agent_id) -> current_tr, covered_tools, covered_policy_codes, expires_at
 ```
 
 用途：
 
 - 减少对网关的重复调用
 - 判断当前 `TR` 是否覆盖本次工具请求
+- `required_tools` 被 `covered_tools` 覆盖且 `TR` 未过期时直接复用
+- 不覆盖或已过期时重新向网关申请
 
 ---
 
@@ -742,7 +775,7 @@ sequenceDiagram
 
 如果只记住这一版最关键的 6 句话，可以压成下面这几句：
 
-1. 第三阶段最终方案里，业务 Agent 不再理解 `scope/code`，只理解本次请求需要哪些 `MCP tool`
+1. 正式方案里，业务 Agent 不再理解 `scope/code`，只理解本次请求需要哪些 `MCP tool`
 2. `tool -> code` 的翻译全部收敛到 `Agent 网关 + 策略中心`
 3. 对 IDaaS 来说，授权对象仍然是 `policy_code`，这一点不变
 4. 对 IAM 和 `MCP 网关` 来说，最终仍然只认 `Tc / T1 / TR` 三令牌模型和最终 `TR`

@@ -1,10 +1,6 @@
-# 第二阶段：无 Agent 网关，引入 `Tc / T1 / TR` 的直连架构
+# 01_无Agent网关版方案
 
-## 0. 相关文档
 
-- [03_令牌设计.md](./03_令牌设计.md)
-- [02_引入Agent网关版方案.md](./02_引入Agent网关版方案.md)
-- [04_接口设计.md](./04_接口设计.md)
 
 ## 1. 目标
 
@@ -177,10 +173,10 @@ sequenceDiagram
 1. 用户打开 `业务 Agent` 页面。
 2. `业务 Agent` 检查浏览器是否已经带了自己的网站登录 cookie，例如 `site_session_id`。
 3. 如果没有，就把浏览器 302 到 `IDaaS /authorize`，并带上：
-   - `scope=base`
-   - `clientId`
-   - `redirectUrl=/auth/base/callback`
-   - `state`
+    - `scope=base`
+    - `clientId`
+    - `redirectUrl=/auth/base/callback`
+    - `state`
 4. `IDaaS` 在 `/authorize` 内部完成登录处理，并在成功后生成 `authorization code`。
 5. `IDaaS` 再把浏览器 302 回 `业务 Agent` 的 `/auth/base/callback`。
 6. `业务 Agent` 用这个 `code` 去调用 IDaaS 的 code 换 token 接口，拿到基础登录结果。
@@ -214,30 +210,30 @@ sequenceDiagram
 ### 7.1 浏览器 <-> 业务 Agent
 
 - `GET /agent`
-  - 页面入口，检查是否已有站点登录态
+    - 页面入口，检查是否已有站点登录态
 - `GET /auth/base/callback`
-  - 接收 base 登录回跳 code
+    - 接收 base 登录回跳 code
 - `GET /auth/consent/callback`
-  - 接收业务授权回跳 code
+    - 接收业务授权回跳 code
 - `POST /chat/send`
-  - 发起聊天请求；如果缺少 `TR` 或 scope 不够，则触发新的业务授权
+    - 发起聊天请求；如果缺少 `TR` 或 scope 不够，则触发新的业务授权
 
 ### 7.2 业务 Agent <-> IDaaS
 
 - `GET /authorize?...&scope=base&redirectUrl=...`
-  - 基础登录
+    - 基础登录
 - `GET /authorize?...&scope=<业务scope>&redirectUrl=...`
-  - 业务授权
+    - 业务授权
 - `POST /oauth2/token` 或等价的 code 换 token 接口
-  - base 阶段：换基础登录结果
-  - 业务授权阶段：换 `Tc`
+    - base 阶段：换基础登录结果
+    - 业务授权阶段：换 `Tc`
 
 ### 7.3 业务 Agent <-> IAM
 
 - `POST /iam/projects/{proxy_project_id}/assume_agent_token`
-  - 申请 `T1`
+    - 申请 `T1`
 - `POST /iam/auth/resource-token`
-  - 用 `Tc + T1` 申请 `TR`
+    - 用 `Tc + T1` 申请 `TR`
 
 ### 7.4 业务 Agent <-> 资源服务
 
@@ -317,9 +313,9 @@ sequenceDiagram
 ## 10. 当前阶段建议
 
 - `scope` 第一阶段先保持粗粒度，例如：
-  - `base`
-  - `report`
-  - `invoice`
+    - `base`
+    - `report`
+    - `invoice`
 - 不在这一阶段引入 `Agent网关`
 - 先把“基础登录”和“业务授权 + Tc/T1/TR”两段闭环跑通
 - `TR` 刷新细节、增量授权优化和平台化抽象后续再单独展开
