@@ -1,48 +1,47 @@
 # 引入 Agent 网关最终方案：引入 Agent 网关 + 策略中心，按工具申请 `TR`
 
----
-
-`01` 为参考方案，`02/03/04` 为当前正式方案。
+`01` 为参考方案，`02/03/04/05` 为当前正式方案。
 
 ## 1. 目标
 
-这一版方案在引入 Agent 网关的基础上，再补上一个关键约束：
+当前正式方案的核心目标是：
 
-- 业务 Agent **不知道权限 code 长什么样**
-- 业务 Agent 只知道：自己这次要调用哪些 `MCP tool`
-- `Agent 网关` 负责把 `required_tools` 反查成 `policy_code`
-- `策略中心` 负责统一维护 `tool <-> policy_code` 映射
-- `IDaaS` 仍然基于 `policy_code` 做登录与授权
+- 业务 Agent **不知道权限点内部结构**
+- 业务 Agent 只知道：本次要调用哪些 `MCP tool`
+- `Agent 网关` 负责把 `required_tools` 反查成 `requiredPermissionPointCodes`
+- `策略中心` 负责统一维护：
+  - 权限点定义
+  - 权限点与工具绑定关系
+  - Agent 策略
+- `IDaaS` 仍然基于权限点 code 做登录与授权
 - `IAM` 仍然基于 `Tc + T1` 生成最终可访问资源的 `TR`
 - 业务 Agent 带 `TR` 访问 `MCP 网关`
-- `MCP 网关` 运行时查询策略中心，把 `TR` 中的授权 code 映射成允许调用的 `MCP tool`，再路由到对应 `MCP 服务`
+- `MCP 网关` 运行时先校验当前工具依赖的权限点是否已包含在 `TR.authorizedPermissionPoints` 中，再结合 Agent 策略判断当前用户是否允许调用目标工具
 
 一句话总结：
 
-**业务 Agent 面向工具，Agent 网关面向 `tool -> code`，策略中心是映射权威源，IDaaS 面向 code 授权，MCP 网关面向 `TR` 并在运行时完成 `code -> tool`。**
-
----
+**业务 Agent 面向工具，Agent 网关面向 `tool -> permissionPointCode`，策略中心是权限点与策略的权威源，TR 是用户授权给 Agent 的上限边界，Agent 策略是 Agent 所有者对不同用户功能开放范围的二次控制。**
 
 ## 2. 核心分工变化
 
-| 职责 | 01_无Agent网关版方案归属 | 02_引入Agent网关版方案归属 | 当前归属 |
-|---|---|---|---|
-| OAuth2 redirect / callback | 业务 Agent | Agent 网关 | **Agent 网关** |
-| code 换 `Tc` | 业务 Agent | Agent 网关 | **Agent 网关** |
-| 申请 `T1` | 业务 Agent | Agent 网关 | **Agent 网关** |
-| 用 `Tc + T1` 合成 `TR` | 业务 Agent | Agent 网关 | **Agent 网关** |
-| 维护 `tool <-> code` 映射 | 无 | 无 | **策略中心** |
-| 判断本次要访问哪些工具 | 业务 Agent | 业务 Agent | **业务 Agent** |
-| 判断这些工具对应哪些 code | 业务 Agent / 人工约定 | 业务 Agent | **Agent 网关 + 策略中心** |
-| 本地站点登录态 `site_session` | 业务 Agent | 业务 Agent | **业务 Agent** |
-| 本地 `TR` 缓存 | 业务 Agent | 业务 Agent | **业务 Agent** |
-| 带 `TR` 调 `MCP 网关` | 业务 Agent | 业务 Agent | **业务 Agent** |
+| 职责 | 01_无Agent网关版方案归属 | 当前归属 |
+|---|---|---|
+| OAuth2 redirect / callback | 业务 Agent | **Agent 网关** |
+| code 换 `Tc` | 业务 Agent | **Agent 网关** |
+| 申请 `T1` | 业务 Agent | **Agent 网关** |
+| 用 `Tc + T1` 合成 `TR` | 业务 Agent | **Agent 网关** |
+| 维护权限点定义与工具绑定关系 | 无 | **策略中心** |
+| 维护 Agent 策略 | 无 | **策略中心** |
+| 判断本次要访问哪些工具 | 业务 Agent | **业务 Agent** |
+| 判断这些工具对应哪些权限点 | 业务 Agent / 人工约定 | **Agent 网关 + 策略中心** |
+| 运行时判断当前用户对工具是否可用 | 资源侧零散约定 | **MCP 网关 + 策略中心** |
+| 本地站点登录态 `site_session` | 业务 Agent | **业务 Agent** |
+| 本地 `TR` 缓存 | 业务 Agent | **业务 Agent** |
+| 带 `TR` 调 `MCP 网关` | 业务 Agent | **业务 Agent** |
 
 这版最关键的变化只有一条：
 
 **业务 Agent 不再上传 `scope/code`，而是上传本次请求所需的 `required_tools`。**
-
----
 
 ## 3. 总体架构图
 
@@ -51,10 +50,10 @@ flowchart LR
     U["用户浏览器"]
     A["业务 Agent<br/>前端 + 瘦后端"]
     GW["Agent 网关<br/>统一认证授权编排"]
-    PC["策略中心<br/>tool/code 映射"]
+    PC["策略中心<br/>权限点/策略权威源"]
     I["IDaaS"]
     IAM["IAM<br/>T1 / TR"]
-R["MCP 网关<br/>运行时 code/tool 映射 + 路由"]
+    R["MCP 网关<br/>TR 校验 + 策略判断 + 路由"]
     S["MCP 服务<br/>具体工具实现"]
 
     U <--> A
@@ -64,6 +63,7 @@ R["MCP 网关<br/>运行时 code/tool 映射 + 路由"]
     GW <--> I
     GW <--> IAM
     A --> R
+    R <--> PC
     R --> S
 ```
 
@@ -72,13 +72,10 @@ R["MCP 网关<br/>运行时 code/tool 映射 + 路由"]
 - 浏览器 OAuth2 重定向经过网关，callback URL 全部指向网关
 - 业务 Agent 不再直连 `IDaaS / IAM`
 - 业务 Agent 只向网关提交 `required_tools`
-- 网关通过策略中心把工具需求翻译成授权 code
+- 网关通过策略中心把工具需求翻译成权限点 code
 - 业务 Agent 拿到 `TR` 后本地缓存，直接调用 `MCP 网关`
-- `MCP 网关` 运行时查询策略中心，基于 `TR` 中的授权 code 反查允许访问的 `MCP tool`
-- `MCP 网关` 再路由到对应 `MCP 服务`
-- 网关不代理业务资源流量
-
----
+- `MCP 网关` 运行时先基于 `TR.authorizedPermissionPoints` 做权限点范围校验，再查询策略中心执行 Agent 策略判断
+- `MCP 网关` 最终再路由到对应 `MCP 服务`
 
 ## 4. 关键概念
 
@@ -89,63 +86,44 @@ R["MCP 网关<br/>运行时 code/tool 映射 + 路由"]
 ```text
 agent_id              → agt_business_001
 agent_name            → 业务数据助手
+app_id                → com.huawei.business.agent
 agent_service_account → svc_ai_business_agent
-principal             → com.huawei.business.agent
-subscribed_tools      → [
-                          mcp:financial-report-server/query_monthly_report,
-                          mcp:financial-report-server/list_report_categories,
-                          mcp:invoice-server/query_invoices
-                        ]
 allowed_return_hosts  → [business-agent.huawei.com]
+status                → ACTIVE
 ```
 
-这里的 `subscribed_tools` 表达的是：
-
-- 这个 Agent 最多能申请哪些工具能力
-- 网关收到 `required_tools` 后，先用它做能力边界校验
+这里的 Agent Registry 只维护 Agent 身份、回跳白名单和换取 `T1` 所需身份信息；权限点定义、权限点与工具绑定关系、Agent 策略都统一放在策略中心中维护。
 
 ### 4.2 策略中心（Policy Center）
 
 策略中心统一维护三类对象：
 
-#### policy 定义
+#### 权限点定义
 
 ```text
-policy_code -> display_name, description, consent_text
+permissionPointCode -> displayNameZh, description, boundTools
 ```
 
 例如：
 
 ```text
-erp:report:read -> 读取财报数据
-erp:report:category:list -> 查看报表分类
-erp:invoice:read -> 读取发票数据
+erp:report:r -> ERP 报表的可读权限
+erp:invoice:r -> ERP 发票的可读权限
 ```
 
-#### tool 定义
+#### 工具定义
 
 ```text
 tool_id -> server_name, method_name, display_name
 ```
 
-例如：
+#### Agent 策略
 
 ```text
-mcp:financial-report-server/query_monthly_report
-mcp:financial-report-server/list_report_categories
-mcp:invoice-server/query_invoices
+agent_id + permissionPointCode -> conditions + effect
 ```
 
-#### tool / code 映射关系
-
-```text
-tool_id <-> policy_code
-```
-
-这里建议按**多对多**设计，不要写死成一对一：
-
-- 一个 `policy_code` 可以覆盖多个工具
-- 一个工具也可能依赖多个 `policy_code`
+当前版本中，一个策略只绑定一个权限点。
 
 ### 4.3 gw_session（网关侧会话）
 
@@ -155,8 +133,6 @@ base 登录成功后由网关创建：
 gw_session_id → user_id, username, created_at
 ```
 
-同时向浏览器种 `gw_session_id` cookie（网关域，HttpOnly + Secure），用于后续业务授权时识别用户。
-
 ### 4.4 gw_session_token（网关颁发给业务 Agent 的凭证）
 
 base 登录完成后，网关通过 `return_url` 带回业务 Agent：
@@ -165,22 +141,16 @@ base 登录完成后，网关通过 `return_url` 带回业务 Agent：
 gw_session_token → 对应网关侧 gw_session_id 的不透明引用
 ```
 
-业务 Agent 将其存入本地 `site_session`，后续调用网关取 `TR` 时使用。
-
 ### 4.5 gw_auth_context（网关侧授权上下文）
 
 业务授权成功后由网关创建：
 
 ```text
 key:   gw_session_id + agent_id
-value: consented_policy_codes, tc, t1, tr, expires_at
+value: authorizedPermissionPoints, tc, t1, tr, expires_at
 ```
 
-这里保存的是 code 视角的授权事实，不再保存“业务 Agent 自己传上来的 scope”。
-
 ### 4.6 pending_base_login（临时状态，用后即删）
-
-base 登录重定向期间暂存：
 
 ```text
 gw_state ->
@@ -189,49 +159,31 @@ gw_state ->
   outer_state
 ```
 
-它的作用是：
-
-- 仅用于 `base` 登录阶段
-- 让 `/gw/auth/base/callback` 能通过 `gw_state` 恢复登录前上下文
-
 ### 4.7 pending_auth_transaction（临时状态，用后即删）
-
-业务授权与获取 `TR` 流程中暂存：
 
 ```text
 request_id ->
   agent_id,
   required_tools,
-  required_policy_codes,
-  missing_policy_codes,
+  requiredPermissionPointCodes,
+  missingPermissionPointCodes,
   return_url,
   gw_session_id,
   outer_state
 ```
 
-同时，网关在 OAuth2 跳转期间内部维护临时关联：
+同时，网关在 OAuth2 跳转期间内部维护：
 
 ```text
 gw_state -> request_id
 ```
 
-它的作用是：
-
-- `request_id` 作为业务 Agent 与网关之间的外部恢复依据
-- `gw_state` 只用于网关和 IDaaS callback 之间的内部恢复
-- 把“这次业务请求到底需要哪些工具”带过重定向流程
-- 把“这些工具对应哪些 code”固定下来
-- 回调后继续完成 `Tc / T1 / TR` 编排
-
----
-
-## 5. 主时序图
+## 5. 主流程
 
 ### 5.1 base 登录阶段
 
 ```mermaid
 sequenceDiagram
-    title 引入 Agent 网关最终方案：base 登录（网关完成后直接返回 gw_session_token）
     participant 用户 as 用户浏览器
     participant Agent as 业务 Agent
     participant GW as Agent 网关
@@ -241,40 +193,26 @@ sequenceDiagram
     Agent->>Agent: 检查 site_session_id
 
     alt 没有站点登录态
-        Agent-->>用户: 302 → /gw/auth/login?agent_id=agt_001&return_url=https://agent/agent&state=xyz
+        Agent-->>用户: 302 到 /gw/auth/login
         用户->>GW: GET /gw/auth/login
-        GW->>GW: 校验 agent_id，校验 return_url host
-        GW->>GW: 记录 pending_base_login
-        GW-->>用户: 302 → IDaaS /authorize?scope=base...
-
-        用户->>IDaaS: GET /authorize?scope=base...
-        IDaaS->>IDaaS: 处理登录
-        IDaaS-->>用户: 302 → /gw/auth/base/callback?code=code_base&state=gw_state_001
-
-        用户->>GW: GET /gw/auth/base/callback
-        GW->>GW: 校验 state
+        GW-->>用户: 302 到 IDaaS /authorize?scope=base
+        用户->>IDaaS: 登录
+        IDaaS-->>用户: 回调 /gw/auth/base/callback
+        用户->>GW: 回网关
         GW->>IDaaS: POST /oauth2/token
         IDaaS-->>GW: 返回 base 登录结果
-        GW->>GW: 创建 gw_session + gw_session_token
-        GW->>GW: Set-Cookie: gw_session_id=xxx
-        GW-->>用户: 302 → https://agent/agent?gw_session_token=xxx&user_id=z01062668&username=张建国&state=xyz
-
-        用户->>Agent: GET /agent?gw_session_token=...
-        Agent->>Agent: 校验 state
-        Agent->>Agent: 创建 site_session
-        Agent-->>用户: 302 → /agent
+        GW-->>用户: 带 gw_session_token 回业务 Agent
+        用户->>Agent: 回原页面
+        Agent->>Agent: 建立 site_session
     else 已有站点登录态
         Agent-->>用户: 直接返回聊天页
     end
 ```
 
-这一段主要描述基础登录闭环，与下文业务授权链路相比变化较小。
-
-### 5.2 业务授权 + 获取 `TR` 阶段
+### 5.2 业务授权 + 获取 TR 阶段
 
 ```mermaid
 sequenceDiagram
-    title 引入 Agent 网关最终方案：按工具申请 TR（Agent 上传 required_tools）
     participant 用户 as 用户浏览器
     participant Agent as 业务 Agent
     participant GW as Agent 网关
@@ -284,500 +222,54 @@ sequenceDiagram
     participant MCP网关 as MCP 网关
     participant MCP服务 as MCP 服务
 
-    用户->>Agent: POST /chat/send（"分析12月财报"）
+    用户->>Agent: POST /chat/send
     Agent->>Agent: 判断本次请求需要哪些 MCP tools
-    Agent->>Agent: 检查本地 TR 缓存是否覆盖这组工具
+    Agent->>Agent: 检查本地 TR 缓存
 
-    alt 本地已有可复用 TR
+    alt 本地有有效 TR 且覆盖这组工具
         Agent->>MCP网关: 带 TR 调 MCP
-        MCP网关->>MCP服务: 按 code 映射允许工具并路由调用
+        MCP网关->>PC: resolve-by-codes + query strategies
+        MCP网关->>MCP服务: 通过 TR 校验和策略判断后路由调用
         MCP服务-->>MCP网关: 返回工具结果
         MCP网关-->>Agent: 返回数据
         Agent-->>用户: 返回答案
-    else 本地没有可复用 TR
+    else 本地无 TR / 过期 / 覆盖不足
         Agent->>GW: POST /gw/token/resource-token {agent_id, required_tools, return_url, state}
-        GW->>GW: 校验 required_tools 是否都在 subscribed_tools 内
-        GW->>PC: POST /internal/v1/policies/resolve-by-tools
-        PC-->>GW: 返回 required_policy_codes
-        GW->>GW: 检查 gw_auth_context 是否已覆盖这些 code
+        GW->>PC: resolve-by-tools(required_tools)
+        PC-->>GW: 返回 requiredPermissionPointCodes
 
-        alt 网关已有可用 TR
-            GW-->>Agent: 200 {access_token: TR, expires_in: 3600}
-            Agent->>Agent: 写入本地 TR 缓存
-            Agent->>MCP网关: 带 TR 调 MCP
-            MCP网关->>MCP服务: 按 code 映射允许工具并路由调用
-            MCP服务-->>MCP网关: 返回工具结果
-            MCP网关-->>Agent: 返回数据
-            Agent-->>用户: 返回答案
-        else 网关缺少授权
-            GW->>GW: 记录 pending_auth_transaction {required_tools, required_policy_codes, ...}
-            GW-->>Agent: 200 {status: "redirect", redirect_url: "https://gw/auth/authorize?..."}
-            Agent-->>用户: 返回 redirect_url
-
-            用户->>用户: sessionStorage 保存原消息
-            用户->>GW: GET /gw/auth/authorize?... 
-            GW->>GW: 从 pending_auth_transaction 读取 required_policy_codes
-            GW-->>用户: 302 → IDaaS /authorize?scope=erp:report:read erp:report:category:list...
-
-            用户->>IDaaS: GET /authorize?... 
-            IDaaS-->>用户: 302 → /gw/auth/consent/callback?code=code_tc&state=gw_state_002
-
-            用户->>GW: GET /gw/auth/consent/callback
-            GW->>GW: 校验 state，读取 required_policy_codes
-            GW->>IDaaS: POST /oauth2/token
-            IDaaS-->>GW: 返回 Tc
-            GW->>IAM: POST /iam/projects/{proxy_project_id}/assume_agent_token
-            IAM-->>GW: 返回 T1
-            GW->>IAM: POST /iam/auth/resource-token
-            IAM-->>GW: 返回 TR
-            GW->>GW: 写入 gw_auth_context
-            GW-->>用户: 302 → https://agent/chat?state=abc
-
-            用户->>Agent: POST /chat/send（恢复重发）
-            Agent->>GW: POST /gw/token/resource-token {agent_id, required_tools, return_url, state}
-            GW-->>Agent: 200 {access_token: TR, expires_in: 3600}
-            Agent->>Agent: 写入本地 TR 缓存
-            Agent->>MCP网关: 带 TR 调 MCP
-            MCP网关->>MCP服务: 按 code 映射允许工具并路由调用
-            MCP服务-->>MCP网关: 返回工具结果
-            MCP网关-->>Agent: 返回数据
-            Agent-->>用户: 返回答案
+        alt 网关已有有效 TR
+            GW-->>Agent: 返回 TR
+        else 网关需要用户参与授权
+            GW-->>Agent: 返回 redirect_url + request_id
+            用户->>GW: GET /gw/auth/authorize
+            GW-->>用户: 302 到 IDaaS /authorize?scope=<requiredPermissionPointCodes>
+            用户->>IDaaS: 完成授权
+            IDaaS-->>用户: 回调 /gw/auth/consent/callback
+            用户->>GW: 回网关
+            GW->>IDaaS: code 换 Tc
+            GW->>IAM: 申请 T1
+            GW->>IAM: 申请 TR
+            GW-->>用户: 回业务 Agent
+            用户->>Agent: 恢复原请求
+            Agent->>GW: 再次取 TR
+            GW-->>Agent: 返回 TR
         end
+
+        Agent->>MCP网关: 带 TR 调 MCP
+        MCP网关->>PC: resolve-by-codes + query strategies
+        MCP网关->>MCP服务: 通过 TR 校验和策略判断后路由调用
+        MCP服务-->>MCP网关: 返回工具结果
+        MCP网关-->>Agent: 返回数据
+        Agent-->>用户: 返回答案
     end
 ```
 
-这张图里最关键的变化是：
-
-- 业务 Agent 不再判断需要哪个 `scope/code`
-- 业务 Agent 只判断需要哪些 `required_tools`
-- 网关再去策略中心把 `required_tools` 反查成 `required_policy_codes`
-- 最终对 IDaaS 发起授权时，仍然是 code 视角
-
----
-
-## 6. 业务 Agent 侧怎么处理
-
-### 6.1 页面首次打开时
-
-业务 Agent 仍然只做下面几件事：
-
-1. 检查是否已有本地 `site_session`
-2. 如果没有，302 到网关 `GET /gw/auth/login`
-3. base 登录完成后，在页面入口 handler 中接收：
-    - `gw_session_token`
-    - `user_id`
-    - `username`
-    - `state`
-4. 校验 `state`
-5. 创建本地 `site_session`
-6. 302 到干净 URL
-
-这部分保持不变，不需要新增 callback 接口。
-
-### 6.2 用户发起资源请求时
-
-业务 Agent 不再判断“需要哪个权限 code”，而是只判断：
-
-- 这次请求准备调用哪些 `MCP tool`
-
-例如：
-
-```text
-- mcp:financial-report-server/query_monthly_report
-- mcp:financial-report-server/list_report_categories
-```
-
-然后：
-
-1. 先看本地 `TR` 缓存能不能覆盖这组工具
-2. 能覆盖就直接带 `TR` 调 `MCP 网关`
-3. 不能覆盖就向网关发起：
-
-```http
-POST /gw/token/resource-token
-Authorization: Bearer <gw_session_token>
-```
-
-```json
-{
-  "agent_id": "agt_business_001",
-  "required_tools": [
-    "mcp:financial-report-server/query_monthly_report",
-    "mcp:financial-report-server/list_report_categories"
-  ],
-  "return_url": "https://business-agent.huawei.com/chat",
-  "state": "st_auth_001"
-}
-```
-
-### 6.3 收到 `redirect_url` 时
-
-业务 Agent 仍然不自己发 302 去打断原始 POST，而是：
-
-- 后端返回 `200 {status: "redirect", redirect_url}` 给前端
-- 前端把当前消息写入 `sessionStorage`
-- 前端跳转到 `redirect_url`
-- 授权回来后依据 `state` 从 `sessionStorage` 恢复消息并重发
-
-### 6.4 收到 `TR` 时
-
-业务 Agent：
-
-- 把 `TR` 写入本地 `tr_cache`
-- 后续请求优先复用本地缓存
-- 本地缓存命中判断从“scope 是否覆盖”改成“当前 `TR` 是否覆盖本次所需工具集合”
-
-### 6.5 业务 Agent 明确不用做什么
-
-- 不开发 `/auth/base/callback`
-- 不开发 `/auth/consent/callback`
-- 不调用 `IDaaS /oauth2/token`
-- 不调用 `IAM /assume_agent_token`
-- 不调用 `IAM /resource-token`
-- 不构造授权 code 列表
-- 不理解 `policy_code`
-- 不保存 `Tc / T1`
-
-一句话总结：
-
-**业务 Agent 只理解“我要哪些工具”“我有没有可复用 TR”“网关给没给 redirect_url / TR”。**
-
----
-
-## 7. Agent 网关侧怎么处理
-
-### 7.1 登录入口 `/gw/auth/login`
-
-网关需要做：
-
-- 校验 `agent_id`
-- 校验 `return_url` host 是否在白名单里
-- 生成内部 `gw_state`
-- 写入 `pending_base_login`
-- 302 到 IDaaS `scope=base` 的 `/authorize`
-
-### 7.2 登录回调 `/gw/auth/base/callback`
-
-网关需要做：
-
-- 校验 `gw_state`
-- 用 code 换基础登录结果
-- 创建 `gw_session`
-- 生成 `gw_session_token`
-- 写入 `gw_session_id` cookie
-- 把 `gw_session_token + 用户信息` 拼回业务 Agent 的 `return_url`
-
-### 7.3 运行时取 `TR`：`POST /gw/token/resource-token`
-
-这是最终方案里最关键的运行时接口。网关收到请求后要依次做四步。
-
-#### 第一步：校验 Agent 能力边界
-
-从 `agent_registry.subscribed_tools` 判断：
-
-- `required_tools` 是否都属于该 Agent 已订阅能力
-- 如果出现未订阅工具，直接拒绝，不进入授权流程
-
-#### 第二步：反查权限 code
-
-调用策略中心：
-
-```http
-POST /internal/v1/policies/resolve-by-tools
-```
-
-输入：
-
-- `agent_id`
-- `required_tools`
-
-输出：
-
-- `required_policy_codes`
-- `policy_items`
-
-这一步之后，网关才知道这次需要用户同意哪些 code。
-
-#### 第三步：检查当前授权是否已覆盖
-
-从 `gw_auth_context` 里判断：
-
-- 当前用户在当前 Agent 下是否已同意这些 `required_policy_codes`
-- 当前 `TR` 是否仍然有效
-
-如果都满足，直接返回 `TR`。
-
-#### 第四步：如果未覆盖，则返回 `redirect_url`
-
-如果授权不够：
-
-- 把 `required_tools + required_policy_codes + return_url + state` 写入 `pending_auth_transaction`
-- 由网关构造统一的 `redirect_url`
-- 返回给业务 Agent
-
-业务 Agent 不需要理解“为什么缺授权”，只需要透传 `redirect_url`。
-
-### 7.4 授权入口 `/gw/auth/authorize`
-
-网关需要做：
-
-- 从网关域 cookie 中取 `gw_session_id`
-- 读取 `pending_auth_transaction`
-- 取出这次已解析好的 `required_policy_codes`
-- 用这些 code 统一拼装 IDaaS 授权地址
-- 302 到 IDaaS
-
-也就是说：
-
-- 对业务 Agent 来说，输入是 `required_tools`
-- 对 IDaaS 来说，输入仍然是 `policy_code`
-- 这个翻译动作完全收敛在网关里
-
-### 7.5 授权回调 `/gw/auth/consent/callback`
-
-网关需要做：
-
-- 校验 `gw_state`
-- 读取 `pending_auth_transaction`
-- 用 code 换 `Tc`
-- 从注册表取 Agent 身份信息
-- 向 IAM 申请 `T1`
-- 用 `Tc + T1` 申请 `TR`
-- 把 `required_policy_codes` 写入 `gw_auth_context`
-- 302 回业务 Agent 原页面
-
-### 7.6 后续透明复用
-
-后续同一用户、同一 Agent 再发起工具请求时：
-
-- 网关优先判断已有 `TR` 是否覆盖本次工具需求
-- 若已覆盖，直接返回 `TR`
-- 若后续要支持自动续期，则由网关基于已保存的 `Tc + T1` 完成，对业务 Agent 透明
-
----
-
-## 8. 最小接口集合
-
-### 8.1 业务 Agent ↔ Agent 网关
-
-- `POST /gw/token/resource-token`
-    - 输入：`agent_id + required_tools + return_url + state`
-    - 输出：`TR` 或 `redirect_url`
-
-### 8.2 Agent 网关 ↔ 策略中心
-
-- `POST /internal/v1/policies/resolve-by-tools`
-    - 输入：`agent_id + required_tools`
-    - 输出：`required_policy_codes + policy_items`
-
-### 8.3 浏览器 ↔ Agent 网关
-
-- `GET /gw/auth/login`
-- `GET /gw/auth/base/callback`
-- `GET /gw/auth/authorize`
-- `GET /gw/auth/consent/callback`
-
-### 8.4 Agent 网关 ↔ IDaaS
-
-- `GET /authorize`
-    - base 登录时：`scope=base`
-    - 业务授权时：`scope=<required_policy_codes>`
-- `POST /oauth2/token`
-    - 用授权码换基础登录结果或 `Tc`
-
-### 8.5 Agent 网关 ↔ IAM
-
-- `POST /iam/projects/{proxy_project_id}/assume_agent_token`
-- `POST /iam/auth/resource-token`
-
-### 8.6 业务 Agent ↔ MCP 网关 / MCP 服务
-
-- 业务 Agent 带 `TR` 调 `MCP 网关`
-- `MCP 网关` 运行时查询策略中心，基于 `TR` 中的授权 code 反查允许访问的 `MCP tool`
-- `MCP 网关` 再路由到对应 `MCP 服务`
-- `MCP 服务` 执行具体工具逻辑并返回结果
-
----
-
-## 9. 状态模型
-
-### 9.1 Agent 网关侧状态
-
-#### `agent_registry`
-
-```text
-agent_id -> agent_name, agent_service_account, principal, subscribed_tools, allowed_return_hosts
-```
-
-用途：
-
-- Agent 身份管理
-- Agent 能力边界校验
-- return_url 白名单校验
-
-#### `gw_session`
-
-```text
-gw_session_id -> user_id, username, created_at
-```
-
-用途：
-
-- 网关侧识别当前用户
-
-#### `gw_auth_context`
-
-```text
-(gw_session_id + agent_id) -> consented_policy_codes, tc, t1, tr, expires_at
-```
-
-用途：
-
-- 记录当前用户在当前 Agent 下已同意的 code 集合
-- 后续直接返回 `TR`
-- 后续做透明续期
-
-#### `pending_base_login`
-
-```text
-gw_state -> agent_id, return_url, outer_state
-```
-
-用途：
-
-- 仅用于 `base` 登录阶段回调恢复
-
-#### `pending_auth_transaction`
-
-```text
-request_id -> agent_id, required_tools, required_policy_codes, missing_policy_codes, return_url, gw_session_id, outer_state
-```
-
-同时，网关内部维护：
-
-```text
-gw_state -> request_id
-```
-
-用途：
-
-- 对外恢复依据是 `request_id`
-- 内部 callback 关联依据是 `gw_state`
-- OAuth2 跳转期间关联这次请求上下文
-- 保证回调后还能恢复“工具需求 -> 授权 code -> 最终 TR”这条链路
-
-### 9.2 业务 Agent 侧状态
-
-#### `site_session`
-
-```text
-site_session_id -> gw_session_token, user_id, username
-```
-
-用途：
-
-- 业务网站自身登录态
-
-#### `tr_cache`
-
-```text
-(site_session_id + agent_id) -> current_tr, covered_tools, covered_policy_codes, expires_at
-```
-
-用途：
-
-- 减少对网关的重复调用
-- 判断当前 `TR` 是否覆盖本次工具请求
-- `required_tools` 被 `covered_tools` 覆盖且 `TR` 未过期时直接复用
-- 不覆盖或已过期时重新向网关申请
-
----
-
-## 10. 安全要点
-
-1. `return_url` 必须按 `allowed_return_hosts` 做 host 白名单校验，防 open redirect
-2. 所有跳转都必须带 `state`，并在回调时校验，防 CSRF
-3. `gw_session_id` 只存在于网关域 cookie 中，必须 `HttpOnly + Secure`
-4. `gw_session_token` 是不透明引用，不直接暴露敏感信息
-5. `T1` 身份必须来自 `agent_registry`，不能信任业务 Agent 运行时上传
-6. `required_tools` 必须先经过 `subscribed_tools` 校验，防止 Agent 越权申请未接入工具
-7. 策略中心是唯一 `tool/code` 映射来源，业务 Agent 不直接拼接授权 code
-8. 业务 Agent 接收 `gw_session_token` 后应尽快写入 `site_session` 并重定向到干净 URL
-
----
-
-## 11. 简化总图
-
-```mermaid
-sequenceDiagram
-    participant 用户
-    participant 业务Agent
-    participant Agent网关
-    participant 策略中心
-    participant IDaaS
-    participant IAM
-    participant MCP网关
-    participant MCP服务
-
-    用户->>业务Agent: 打开页面
-    业务Agent->>Agent网关: 302 到 /gw/auth/login
-    Agent网关->>IDaaS: 302 到 /authorize(scope=base)
-    IDaaS-->>Agent网关: 回调 code
-    Agent网关->>IDaaS: 用 code 换基础登录结果
-    IDaaS-->>Agent网关: 返回 base 结果
-    Agent网关->>Agent网关: 创建 gw_session
-    Agent网关-->>业务Agent: 302 回 return_url（附带 gw_session_token）
-    业务Agent->>业务Agent: 建立站点登录态
-
-    用户->>业务Agent: 发起资源型对话
-    业务Agent->>业务Agent: 判断需要哪些 MCP tools
-    业务Agent->>Agent网关: POST /gw/token/resource-token（required_tools）
-    Agent网关->>策略中心: resolve-by-tools(required_tools)
-    策略中心-->>Agent网关: 返回 required_policy_codes
-    Agent网关-->>业务Agent: 200 {status: redirect, redirect_url}
-
-    Note over 业务Agent: Agent 不理解 code，只透传 redirect_url
-    业务Agent-->>用户: 返回 redirect_url
-    用户->>Agent网关: 跳转到 redirect_url
-
-    Agent网关->>IDaaS: 302 到 /authorize(scope=required_policy_codes)
-    IDaaS-->>Agent网关: 回调 code
-    Agent网关->>IDaaS: 用 code 换 Tc
-    IDaaS-->>Agent网关: 返回 Tc
-    Agent网关->>IAM: 用 Agent 注册身份申请 T1
-    IAM-->>Agent网关: 返回 T1
-    Agent网关->>IAM: 用 Tc + T1 申请 TR
-    IAM-->>Agent网关: 返回 TR
-    Agent网关-->>用户: 302 回业务 Agent 页面
-
-    用户->>业务Agent: 重发请求（sessionStorage 恢复）
-    业务Agent->>Agent网关: POST /gw/token/resource-token
-    Agent网关-->>业务Agent: 200 {access_token: TR}
-    业务Agent->>业务Agent: 缓存 TR
-    业务Agent->>MCP网关: 带 TR 调 MCP
-    MCP网关->>MCP服务: 按 code 映射允许工具并路由调用
-    MCP服务-->>MCP网关: 返回结果
-    MCP网关-->>业务Agent: 返回结果
-    业务Agent-->>用户: 返回答案
-```
-
-这张图用于快速理解主线，重点只有五句：
-
-- 第一次打开页面时，网关代为完成基础登录，Agent 只收一个 `gw_session_token`
-- 业务 Agent 发起资源请求时，不上传 code，只上传 `required_tools`
-- 网关通过策略中心把工具需求翻译成授权 code
-- 网关代为完成全部授权流程（IDaaS 授权 → 换 `Tc` → 申请 `T1` → 合成 `TR`）
-- 业务 Agent 最终只拿 `TR` 并使用 `TR`
-
----
-
-## 12. 一页结论
-
-如果只记住这一版最关键的 6 句话，可以压成下面这几句：
-
-1. 正式方案里，业务 Agent 不再理解 `scope/code`，只理解本次请求需要哪些 `MCP tool`
-2. `tool -> code` 的翻译全部收敛到 `Agent 网关 + 策略中心`
-3. 对 IDaaS 来说，授权对象仍然是 `policy_code`，这一点不变
-4. 对 IAM 和 `MCP 网关` 来说，最终仍然只认 `Tc / T1 / TR` 三令牌模型和最终 `TR`
-5. 对业务 Agent 来说，真正新增且长期对接的核心接口只有 `POST /gw/token/resource-token`
-6. **业务 Agent 轻，Agent 网关重，策略中心负责语言转换，这才是这版方案的核心结构**
+## 6. 当前设计结论
+
+- 业务 Agent 只上传 `required_tools`
+- Agent 网关负责 `required_tools -> requiredPermissionPointCodes`
+- `Tc` 和 `TR` 都携带权限点对象数组
+- `TR` 是用户授权给 Agent 的权限点上限边界
+- MCP 网关必须先校验当前工具所需权限点是否在 `TR.authorizedPermissionPoints` 中
+- 之后再结合 Agent 策略判断当前用户是否允许使用这些功能
