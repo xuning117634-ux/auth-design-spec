@@ -55,7 +55,7 @@ mvn spring-boot:run
 
 浏览器打开：
 
-- [http://localhost:18082/agent](http://localhost:18082/agent)
+    - [http://localhost:18082/agent](http://localhost:18082/agent)
 
 验证步骤：
 

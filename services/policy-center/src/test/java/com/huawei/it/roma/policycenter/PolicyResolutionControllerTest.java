@@ -19,45 +19,62 @@ class PolicyResolutionControllerTest {
     private MockMvc mockMvc;
 
     @Test
-    void shouldResolveToolsToPolicies() throws Exception {
-        mockMvc.perform(post("/internal/v1/policies/resolve-by-tools")
+    void shouldResolveToolsToPermissionPoints() throws Exception {
+        mockMvc.perform(post("/internal/v1/permission-points/resolve-by-tools")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "agentId": "agt_business_001",
                                   "requiredTools": [
-                                    "mcp:financial-report-server/list_report_categories",
-                                    "mcp:financial-report-server/query_monthly_report"
+                                    "mcp:contract-server/get_contract"
                                   ]
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.requiredPolicyCodes[0]").value("erp:report:category:list"))
-                .andExpect(jsonPath("$.requiredPolicyCodes[1]").value("erp:report:read"))
-                .andExpect(jsonPath("$.policyItems.length()").value(2));
+                .andExpect(jsonPath("$.requiredPermissionPointCodes[0]").value("erp:contract:r"))
+                .andExpect(jsonPath("$.permissionPoints[0].code").value("erp:contract:r"))
+                .andExpect(jsonPath("$.permissionPoints[0].displayNameZh").value("ERP 合同的可读权限"));
     }
 
     @Test
     void shouldResolveCodesToTools() throws Exception {
-        mockMvc.perform(post("/internal/v1/policies/resolve-by-codes")
+        mockMvc.perform(post("/internal/v1/permission-points/resolve-by-codes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "policyCodes": [
-                                    "erp:report:read",
-                                    "erp:report:category:list"
+                                  "permissionPointCodes": [
+                                    "erp:contract:r"
                                   ]
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.allowedTools[0]").value("mcp:financial-report-server/list_report_categories"))
-                .andExpect(jsonPath("$.allowedTools[1]").value("mcp:financial-report-server/query_monthly_report"))
-                .andExpect(jsonPath("$.toolItems.length()").value(2));
+                .andExpect(jsonPath("$.allowedTools[0]").value("mcp:contract-server/get_contract"))
+                .andExpect(jsonPath("$.permissionPoints[0].code").value("erp:contract:r"))
+                .andExpect(jsonPath("$.toolItems[0].toolId").value("mcp:contract-server/get_contract"));
+    }
+
+    @Test
+    void shouldQueryAgentStrategies() throws Exception {
+        mockMvc.perform(post("/internal/v1/agent-strategies/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agentId": "agt_business_001",
+                                  "permissionPointCodes": [
+                                    "erp:contract:r",
+                                    "erp:invoice:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.strategies.length()").value(2))
+                .andExpect(jsonPath("$.strategies[0].permissionPointCode").value("erp:contract:r"))
+                .andExpect(jsonPath("$.strategies[1].permissionPointCode").value("erp:invoice:r"));
     }
 
     @Test
     void shouldRejectUnknownTool() throws Exception {
-        mockMvc.perform(post("/internal/v1/policies/resolve-by-tools")
+        mockMvc.perform(post("/internal/v1/permission-points/resolve-by-tools")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

@@ -31,7 +31,7 @@ public class MockIdaasGrantStore {
             String flow,
             String userId,
             String username,
-            Set<String> policyCodes
+            Set<String> permissionPointCodes
     ) {
     }
 }

@@ -20,10 +20,10 @@ public class AgentRegistryStore {
                 .map(entry -> new AgentRegistryEntry(
                         entry.getAgentId(),
                         entry.getAgentName(),
+                        entry.getAppId(),
                         entry.getAgentServiceAccount(),
-                        entry.getPrincipal(),
-                        entry.getSubscribedTools().stream().collect(Collectors.toSet()),
-                        entry.getAllowedReturnHosts()
+                        entry.getAllowedReturnHosts(),
+                        entry.getStatus()
                 ))
                 .collect(Collectors.toMap(AgentRegistryEntry::agentId, Function.identity()));
     }

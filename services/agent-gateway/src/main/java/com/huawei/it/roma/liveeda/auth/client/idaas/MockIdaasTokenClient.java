@@ -1,5 +1,6 @@
 package com.huawei.it.roma.liveeda.auth.client.idaas;
 
+import com.huawei.it.roma.liveeda.auth.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.auth.domain.BaseLoginResult;
 import com.huawei.it.roma.liveeda.auth.domain.IssuedToken;
 import com.huawei.it.roma.liveeda.auth.domain.UserAuthorizationResult;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 public class MockIdaasTokenClient implements IdaasTokenClient {
 
     private final MockIdaasGrantStore mockIdaasGrantStore;
+    private final PolicyCenterClient policyCenterClient;
     private final JwtTokenFactory jwtTokenFactory;
 
     @Override
@@ -36,11 +38,13 @@ public class MockIdaasTokenClient implements IdaasTokenClient {
         if (!"consent".equals(grant.flow())) {
             throw new GatewayException(HttpStatus.BAD_REQUEST, "Code does not belong to consent flow");
         }
-        IssuedToken tc = jwtTokenFactory.issueMockTc(grant.userId(), grant.username(), grant.policyCodes());
+        var permissionPoints = policyCenterClient.resolveByCodes(grant.permissionPointCodes());
+        IssuedToken tc = jwtTokenFactory.issueMockTc(grant.userId(), grant.username(), permissionPoints);
         return new UserAuthorizationResult(
                 grant.userId(),
                 grant.username(),
-                grant.policyCodes(),
+                grant.permissionPointCodes(),
+                permissionPoints,
                 tc.accessToken(),
                 tc.expiresAt()
         );

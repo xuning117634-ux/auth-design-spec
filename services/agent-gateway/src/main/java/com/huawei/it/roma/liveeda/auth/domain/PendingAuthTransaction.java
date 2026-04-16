@@ -1,13 +1,15 @@
 package com.huawei.it.roma.liveeda.auth.domain;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Set;
 
 public record PendingAuthTransaction(
         String requestId,
         String agentId,
         Set<String> requiredTools,
-        Set<String> requiredPolicyCodes,
+        Set<String> requiredPermissionPointCodes,
+        List<AuthorizedPermissionPoint> requiredPermissionPoints,
         URI returnUrl,
         String outerState,
         String gatewaySessionId,
@@ -18,7 +20,8 @@ public record PendingAuthTransaction(
                 requestId,
                 agentId,
                 requiredTools,
-                requiredPolicyCodes,
+                requiredPermissionPointCodes,
+                requiredPermissionPoints,
                 returnUrl,
                 outerState,
                 gatewaySessionId,

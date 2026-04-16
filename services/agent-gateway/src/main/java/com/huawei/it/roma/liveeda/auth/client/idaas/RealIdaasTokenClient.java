@@ -5,11 +5,14 @@ import com.auth0.jwt.interfaces.DecodedJWT;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.config.IdaasProperties;
+import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.domain.BaseLoginResult;
 import com.huawei.it.roma.liveeda.auth.domain.UserAuthorizationResult;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -44,8 +47,52 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
         Map<String, Object> userClaim = decodedJWT.getClaim("user").asMap();
         String userId = stringOrDefault(userClaim, "user_id", decodedJWT.getSubject());
         String username = stringOrDefault(userClaim, "username", userId);
-        Set<String> scopes = new LinkedHashSet<>(decodedJWT.getClaim("consented_scopes").asList(String.class));
-        return new UserAuthorizationResult(userId, username, scopes, response.accessToken(), decodedJWT.getExpiresAtAsInstant());
+        List<AuthorizedPermissionPoint> permissionPoints = extractAuthorizedPermissionPoints(decodedJWT);
+        if (permissionPoints.isEmpty()) {
+            throw new GatewayException(HttpStatus.BAD_GATEWAY,
+                    "IDaaS token response missing authorizedPermissionPoints");
+        }
+        Set<String> permissionPointCodes = permissionPoints.stream()
+                .map(AuthorizedPermissionPoint::code)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        return new UserAuthorizationResult(
+                userId,
+                username,
+                permissionPointCodes,
+                permissionPoints,
+                response.accessToken(),
+                decodedJWT.getExpiresAtAsInstant()
+        );
+    }
+
+    private List<AuthorizedPermissionPoint> extractAuthorizedPermissionPoints(DecodedJWT decodedJWT) {
+        List<Map<?, ?>> claims = readMapClaims(decodedJWT, "authorizedPermissionPoints");
+        List<AuthorizedPermissionPoint> permissionPoints = new ArrayList<>();
+        if (claims == null) {
+            return permissionPoints;
+        }
+        for (Map<?, ?> claim : claims) {
+            String code = claim == null ? null : String.valueOf(claim.get("code"));
+            String displayNameZh = claim == null ? null : String.valueOf(claim.get("displayNameZh"));
+            if (code != null && !code.isBlank()) {
+                permissionPoints.add(new AuthorizedPermissionPoint(code, displayNameZh == null ? code : displayNameZh));
+            }
+        }
+        return permissionPoints;
+    }
+
+    private List<Map<?, ?>> readMapClaims(DecodedJWT decodedJWT, String claimName) {
+        List<Object> rawClaims = decodedJWT.getClaim(claimName).asList(Object.class);
+        if (rawClaims == null) {
+            return null;
+        }
+        List<Map<?, ?>> claims = new ArrayList<>();
+        for (Object rawClaim : rawClaims) {
+            if (rawClaim instanceof Map<?, ?> map) {
+                claims.add(map);
+            }
+        }
+        return claims;
     }
 
     private TokenResponse exchangeToken(String code, String redirectUri) {

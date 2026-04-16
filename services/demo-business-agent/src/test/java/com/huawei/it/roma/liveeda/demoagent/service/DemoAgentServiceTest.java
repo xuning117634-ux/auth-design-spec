@@ -3,6 +3,7 @@ package com.huawei.it.roma.liveeda.demoagent.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
@@ -15,8 +16,8 @@ import com.huawei.it.roma.liveeda.demoagent.config.DemoAgentProperties;
 import com.huawei.it.roma.liveeda.demoagent.domain.SiteSession;
 import com.huawei.it.roma.liveeda.demoagent.store.SiteSessionStore;
 import com.huawei.it.roma.liveeda.demoagent.store.TrCacheStore;
-import com.huawei.it.roma.liveeda.demoagent.web.ChatResponse;
 import com.huawei.it.roma.liveeda.demoagent.util.IdGenerator;
+import com.huawei.it.roma.liveeda.demoagent.web.ChatResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +30,9 @@ class DemoAgentServiceTest {
     @Mock
     private AgentGatewayClient agentGatewayClient;
 
+    @Mock
+    private MockMcpGatewayClient mockMcpGatewayClient;
+
     private DemoAgentService demoAgentService;
     private SiteSession siteSession;
 
@@ -37,6 +41,7 @@ class DemoAgentServiceTest {
         DemoAgentProperties properties = new DemoAgentProperties();
         properties.setAgentId("agt_business_001");
         properties.setGatewayBaseUrl("http://localhost:18080");
+        properties.setPolicyCenterBaseUrl("http://localhost:18081");
         properties.setSelfBaseUrl("http://localhost:18082");
 
         demoAgentService = new DemoAgentService(
@@ -44,7 +49,7 @@ class DemoAgentServiceTest {
                 new SiteSessionStore(),
                 new TrCacheStore(),
                 agentGatewayClient,
-                new MockMcpClient(),
+                mockMcpGatewayClient,
                 new IdGenerator()
         );
         siteSession = demoAgentService.createSiteSession("gwst_demo_001", "z01062668", "demo.user");
@@ -59,9 +64,13 @@ class DemoAgentServiceTest {
                 eq("http://localhost:18082/agent.html"),
                 anyString()
         )).thenReturn(new GatewayTokenResponse("tr_demo_001", 1800L, null, null, null));
+        when(mockMcpGatewayClient.extractAuthorizedPermissionPointCodes("tr_demo_001"))
+                .thenReturn(java.util.Set.of("erp:contract:r"));
+        when(mockMcpGatewayClient.invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString()))
+                .thenReturn("模拟的合同查询结果");
 
-        ChatResponse first = demoAgentService.handleChat(siteSession.siteSessionId(), "请帮我分析财报");
-        ChatResponse second = demoAgentService.handleChat(siteSession.siteSessionId(), "请继续分析财报");
+        ChatResponse first = demoAgentService.handleChat(siteSession.siteSessionId(), "请帮我看一下这个合同");
+        ChatResponse second = demoAgentService.handleChat(siteSession.siteSessionId(), "继续看一下这个合同");
 
         assertEquals("answer", first.status());
         assertEquals("gateway", first.source());
@@ -78,6 +87,7 @@ class DemoAgentServiceTest {
                 eq("http://localhost:18082/agent.html"),
                 anyString()
         );
+        verify(mockMcpGatewayClient, times(2)).invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString());
     }
 
     @Test

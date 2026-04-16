@@ -22,4 +22,8 @@ public class SiteSessionStore {
     public Optional<SiteSession> find(String siteSessionId) {
         return Optional.ofNullable(cache.getIfPresent(siteSessionId));
     }
+
+    public void delete(String siteSessionId) {
+        cache.invalidate(siteSessionId);
+    }
 }

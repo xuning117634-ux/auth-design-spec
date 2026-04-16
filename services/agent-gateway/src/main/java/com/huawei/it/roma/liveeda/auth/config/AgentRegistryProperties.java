@@ -27,13 +27,13 @@ public class AgentRegistryProperties {
         private String agentName;
 
         @NotBlank
+        private String appId;
+
+        @NotBlank
         private String agentServiceAccount;
 
         @NotBlank
-        private String principal;
-
-        @NotEmpty
-        private List<String> subscribedTools = new ArrayList<>();
+        private String status;
 
         @NotEmpty
         private List<String> allowedReturnHosts = new ArrayList<>();

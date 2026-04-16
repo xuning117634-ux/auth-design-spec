@@ -7,5 +7,5 @@ public interface IdaasAuthorizeSupport {
 
     URI buildBaseAuthorizationUri(String gwState);
 
-    URI buildConsentAuthorizationUri(String gwState, Set<String> requiredPolicyCodes);
+    URI buildConsentAuthorizationUri(String gwState, Set<String> requiredPermissionPointCodes);
 }

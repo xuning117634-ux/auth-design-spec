@@ -43,17 +43,16 @@ public class ResourceTokenService {
                 .orElseThrow(() -> new GatewayException(HttpStatus.UNAUTHORIZED, "Invalid gw_session_token"));
 
         AgentRegistryEntry agentRegistryEntry = agentRegistryStore.require(request.agentId());
+        if (!agentRegistryEntry.isActive()) {
+            throw new GatewayException(HttpStatus.FORBIDDEN, "Agent is not active");
+        }
         URI validatedReturnUrl = returnUrlValidator.validate(agentRegistryEntry, request.returnUrl());
 
         Set<String> requiredTools = sanitizeTools(request.requiredTools());
-        if (!agentRegistryEntry.subscribedTools().containsAll(requiredTools)) {
-            throw new GatewayException(HttpStatus.FORBIDDEN, "required_tools contains unsubscribed tools");
-        }
-
         PolicyResolutionResult policyResolutionResult = policyCenterClient.resolveByTools(request.agentId(), requiredTools);
         GatewayAuthContext gatewayAuthContext = gatewayAuthContextStore.find(gatewaySession.gatewaySessionId(), request.agentId())
                 .orElse(null);
-        if (gatewayAuthContext != null && gatewayAuthContext.covers(policyResolutionResult.requiredPolicyCodes(), clock)) {
+        if (gatewayAuthContext != null && gatewayAuthContext.covers(policyResolutionResult.requiredPermissionPointCodes(), clock)) {
             long expiresIn = Math.max(0, gatewayAuthContext.expiresAt().getEpochSecond() - clock.instant().getEpochSecond());
             return ResourceTokenResponse.direct(gatewayAuthContext.trToken(), expiresIn);
         }
@@ -63,7 +62,8 @@ public class ResourceTokenService {
                 requestId,
                 request.agentId(),
                 requiredTools,
-                policyResolutionResult.requiredPolicyCodes(),
+                policyResolutionResult.requiredPermissionPointCodes(),
+                policyResolutionResult.permissionPoints(),
                 validatedReturnUrl,
                 request.state(),
                 gatewaySession.gatewaySessionId(),

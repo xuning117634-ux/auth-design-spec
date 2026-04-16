@@ -1,6 +1,8 @@
 package com.huawei.it.roma.policycenter.controller;
 
 import com.huawei.it.roma.policycenter.service.PolicyResolutionService;
+import com.huawei.it.roma.policycenter.web.QueryAgentStrategiesRequest;
+import com.huawei.it.roma.policycenter.web.QueryAgentStrategiesResponse;
 import com.huawei.it.roma.policycenter.web.ResolveByCodesRequest;
 import com.huawei.it.roma.policycenter.web.ResolveByCodesResponse;
 import com.huawei.it.roma.policycenter.web.ResolveByToolsRequest;
@@ -13,19 +15,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/internal/v1/policies")
+@RequestMapping("/internal/v1")
 @RequiredArgsConstructor
 public class PolicyResolutionController {
 
     private final PolicyResolutionService policyResolutionService;
 
-    @PostMapping("/resolve-by-tools")
+    @PostMapping("/permission-points/resolve-by-tools")
     public ResolveByToolsResponse resolveByTools(@Valid @RequestBody ResolveByToolsRequest request) {
         return policyResolutionService.resolveByTools(request.agentId(), request.requiredTools());
     }
 
-    @PostMapping("/resolve-by-codes")
+    @PostMapping("/permission-points/resolve-by-codes")
     public ResolveByCodesResponse resolveByCodes(@Valid @RequestBody ResolveByCodesRequest request) {
-        return policyResolutionService.resolveByCodes(request.policyCodes());
+        return policyResolutionService.resolveByCodes(request.permissionPointCodes());
+    }
+
+    @PostMapping("/agent-strategies/query")
+    public QueryAgentStrategiesResponse queryAgentStrategies(@Valid @RequestBody QueryAgentStrategiesRequest request) {
+        return policyResolutionService.queryAgentStrategies(request.agentId(), request.permissionPointCodes());
     }
 }

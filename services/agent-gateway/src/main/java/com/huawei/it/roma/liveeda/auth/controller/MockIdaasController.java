@@ -1,10 +1,16 @@
 package com.huawei.it.roma.liveeda.auth.controller;
 
+import com.huawei.it.roma.liveeda.auth.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
+import com.huawei.it.roma.liveeda.auth.domain.GatewaySession;
+import com.huawei.it.roma.liveeda.auth.service.GatewayAuthService;
+import com.huawei.it.roma.liveeda.auth.store.GatewaySessionStore;
 import com.huawei.it.roma.liveeda.auth.store.MockIdaasGrantStore;
 import com.huawei.it.roma.liveeda.auth.util.IdGenerator;
 import java.net.URI;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,6 +34,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class MockIdaasController {
 
     private final MockIdaasGrantStore mockIdaasGrantStore;
+    private final GatewaySessionStore gatewaySessionStore;
+    private final PolicyCenterClient policyCenterClient;
     private final AgentGatewayProperties properties;
     private final IdGenerator idGenerator;
 
@@ -35,12 +44,14 @@ public class MockIdaasController {
             @RequestParam("flow") String flow,
             @RequestParam("redirect_uri") String redirectUri,
             @RequestParam("scope") String scope,
-            @RequestParam("state") String state
+            @RequestParam("state") String state,
+            @CookieValue(name = GatewayAuthService.GATEWAY_SESSION_COOKIE, required = false) String gatewaySessionId
     ) {
         if ("base".equals(flow)) {
             return renderBaseLoginPage(redirectUri, scope, state);
         }
-        return renderConsentPage(redirectUri, scope, state);
+        GatewaySession gatewaySession = gatewaySessionId == null ? null : gatewaySessionStore.findById(gatewaySessionId).orElse(null);
+        return renderConsentPage(redirectUri, scope, state, gatewaySession);
     }
 
     @PostMapping("/approve")
@@ -52,10 +63,15 @@ public class MockIdaasController {
             @RequestParam(name = "user_id", required = false) String userId,
             @RequestParam(name = "username", required = false) String username,
             @RequestParam(name = "password", required = false) String password,
-            @RequestParam(name = "approved", required = false) String approved
+            @RequestParam(name = "approved", required = false) String approved,
+            @CookieValue(name = GatewayAuthService.GATEWAY_SESSION_COOKIE, required = false) String gatewaySessionId
     ) {
-        String resolvedUserId = trimToDefault(userId, properties.getDefaultUserId());
-        String resolvedUsername = trimToDefault(username, properties.getDefaultUsername());
+        GatewaySession gatewaySession = gatewaySessionId == null ? null : gatewaySessionStore.findById(gatewaySessionId).orElse(null);
+        String defaultUserId = gatewaySession == null ? properties.getDefaultUserId() : gatewaySession.userId();
+        String defaultUsername = gatewaySession == null ? properties.getDefaultUsername() : gatewaySession.username();
+
+        String resolvedUserId = trimToDefault(userId, defaultUserId);
+        String resolvedUsername = trimToDefault(username, defaultUsername);
         if ("base".equals(flow)) {
             if (password == null || password.isBlank()) {
                 throw new IllegalArgumentException("password must not be blank");
@@ -152,14 +168,21 @@ public class MockIdaasController {
         );
     }
 
-    private String renderConsentPage(String redirectUri, String scope, String state) {
-        String scopeItems = Arrays.stream(scope.split(","))
+    private String renderConsentPage(String redirectUri, String scope, String state, GatewaySession gatewaySession) {
+        Set<String> permissionPointCodes = Arrays.stream(scope.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isEmpty())
-                .sorted()
-                .map(this::escapeHtml)
-                .map(value -> "<li><code>" + value + "</code></li>")
+                .collect(Collectors.toSet());
+        String scopeItems = policyCenterClient.resolveByCodes(permissionPointCodes).stream()
+                .sorted(Comparator.comparing(AuthorizedPermissionPoint::code))
+                .map(point -> """
+                        <li><code>%s</code><div style="margin-top: 4px; color: #4b5563;">%s</div></li>
+                        """.formatted(escapeHtml(point.code()), escapeHtml(point.displayNameZh())))
                 .collect(Collectors.joining());
+
+        String userId = gatewaySession == null ? properties.getDefaultUserId() : gatewaySession.userId();
+        String username = gatewaySession == null ? properties.getDefaultUsername() : gatewaySession.username();
+
         return """
                 <!DOCTYPE html>
                 <html lang="zh-CN">
@@ -173,7 +196,7 @@ public class MockIdaasController {
                     h1 { margin: 0 0 8px; font-size: 28px; }
                     p { line-height: 1.6; }
                     ul { margin: 14px 0 0; padding-left: 20px; }
-                    li { margin: 8px 0; }
+                    li { margin: 10px 0; }
                     code { background: #eef2ff; padding: 2px 6px; border-radius: 6px; }
                     .consent-box { margin-top: 18px; padding: 16px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px; }
                     .checkbox { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; }
@@ -186,7 +209,7 @@ public class MockIdaasController {
                   <div class="card">
                     <div class="badge">Mock IDaaS</div>
                     <h1>授权确认</h1>
-                    <p>业务 Agent 正在申请访问以下策略编码，以便后续换取可访问资源的 <code>TR</code>。</p>
+                    <p>当前登录用户 <code>%s</code>（%s） 正在为业务 Agent 授权以下权限点，用于后续换取可访问资源的 <code>TR</code>。</p>
                     <div class="consent-box">
                       <strong>本次申请范围：</strong>
                       <ul>%s</ul>
@@ -196,21 +219,27 @@ public class MockIdaasController {
                       <input type="hidden" name="redirect_uri" value="%s"/>
                       <input type="hidden" name="scope" value="%s"/>
                       <input type="hidden" name="state" value="%s"/>
+                      <input type="hidden" name="user_id" value="%s"/>
+                      <input type="hidden" name="username" value="%s"/>
                       <div class="checkbox">
                         <input id="approved" name="approved" type="checkbox" value="true" required/>
                         <label for="approved">我已阅读并同意将以上权限授权给当前业务 Agent，用于本次资源访问。</label>
                       </div>
                       <button type="submit">确认授权并继续</button>
-                      <div class="tip">这是本地演示页，实际系统中这里会展示更完整的授权说明和风险提示。</div>
+                      <div class="tip">这里会沿用当前已登录用户，不会回退成默认演示账号。</div>
                     </form>
                   </div>
                 </body>
                 </html>
                 """.formatted(
+                escapeHtml(userId),
+                escapeHtml(username),
                 scopeItems,
                 escapeHtml(redirectUri),
                 escapeHtml(scope),
-                escapeHtml(state)
+                escapeHtml(state),
+                escapeHtml(userId),
+                escapeHtml(username)
         );
     }
 

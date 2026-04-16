@@ -4,14 +4,15 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
+import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.domain.IssuedToken;
 import com.huawei.it.roma.liveeda.auth.domain.UserAuthorizationResult;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -23,7 +24,7 @@ public class JwtTokenFactory {
     private final Clock clock;
     private final IdGenerator idGenerator;
 
-    public IssuedToken issueMockTc(String userId, String username, Set<String> scopes) {
+    public IssuedToken issueMockTc(String userId, String username, List<AuthorizedPermissionPoint> authorizedPermissionPoints) {
         Instant now = clock.instant();
         Instant expiresAt = now.plus(1, ChronoUnit.HOURS);
 
@@ -40,7 +41,7 @@ public class JwtTokenFactory {
                 .withExpiresAt(expiresAt)
                 .withJWTId(idGenerator.next("tc"))
                 .withClaim("user", userClaim)
-                .withClaim("consented_scopes", scopes.stream().sorted().toList())
+                .withClaim("authorizedPermissionPoints", toPermissionPointClaims(authorizedPermissionPoints))
                 .sign(algorithm());
         return new IssuedToken(token, expiresAt);
     }
@@ -52,11 +53,12 @@ public class JwtTokenFactory {
         Map<String, Object> agentClaim = new LinkedHashMap<>();
         agentClaim.put("agent_id", agentRegistryEntry.agentId());
         agentClaim.put("agent_name", agentRegistryEntry.agentName());
+        agentClaim.put("app_id", agentRegistryEntry.appId());
         agentClaim.put("agent_type", "server");
 
         String token = JWT.create()
                 .withIssuer("mock-iam")
-                .withSubject(agentRegistryEntry.principal())
+                .withSubject(agentRegistryEntry.appId())
                 .withIssuedAt(now)
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt)
@@ -74,6 +76,7 @@ public class JwtTokenFactory {
         Map<String, Object> agentClaim = new LinkedHashMap<>();
         agentClaim.put("agent_id", agentRegistryEntry.agentId());
         agentClaim.put("agent_name", agentRegistryEntry.agentName());
+        agentClaim.put("app_id", agentRegistryEntry.appId());
         agentClaim.put("agent_type", "server");
 
         Map<String, Object> agencyUserClaim = new LinkedHashMap<>();
@@ -81,12 +84,12 @@ public class JwtTokenFactory {
         agencyUserClaim.put("user_id", authorizationResult.userId());
         agencyUserClaim.put("global_user_id", authorizationResult.userId());
         agencyUserClaim.put("oauth_client_id", "agent_gateway_client");
-        agencyUserClaim.put("oauth_client_app_id", agentRegistryEntry.principal());
-        agencyUserClaim.put("consented_scopes", authorizationResult.consentedPolicyCodes().stream().sorted().toList());
+        agencyUserClaim.put("oauth_client_app_id", agentRegistryEntry.appId());
+        agencyUserClaim.put("authorizedPermissionPoints", toPermissionPointClaims(authorizationResult.authorizedPermissionPoints()));
 
         String token = JWT.create()
                 .withIssuer("mock-iam")
-                .withSubject(agentRegistryEntry.principal())
+                .withSubject(agentRegistryEntry.appId())
                 .withIssuedAt(now)
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt)
@@ -99,5 +102,16 @@ public class JwtTokenFactory {
 
     private Algorithm algorithm() {
         return Algorithm.HMAC256(properties.getJwtSecret());
+    }
+
+    private List<Map<String, Object>> toPermissionPointClaims(List<AuthorizedPermissionPoint> permissionPoints) {
+        return permissionPoints.stream()
+                .map(point -> {
+                    Map<String, Object> claim = new LinkedHashMap<>();
+                    claim.put("code", point.code());
+                    claim.put("displayNameZh", point.displayNameZh());
+                    return claim;
+                })
+                .toList();
     }
 }

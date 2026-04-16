@@ -30,12 +30,12 @@ public class RealIdaasAuthorizeSupport implements IdaasAuthorizeSupport {
     }
 
     @Override
-    public URI buildConsentAuthorizationUri(String gwState, Set<String> requiredPolicyCodes) {
+    public URI buildConsentAuthorizationUri(String gwState, Set<String> requiredPermissionPointCodes) {
         return UriComponentsBuilder.fromHttpUrl(idaaSProperties.getAuthorizeUrl())
                 .queryParam("response_type", "code")
                 .queryParam("client_id", idaaSProperties.getClientId())
                 .queryParam("redirect_uri", properties.getSelfBaseUrl() + "/gw/auth/consent/callback")
-                .queryParam("scope", String.join(" ", requiredPolicyCodes.stream().sorted().toList()))
+                .queryParam("scope", String.join(" ", requiredPermissionPointCodes.stream().sorted().toList()))
                 .queryParam("state", gwState)
                 .build(true)
                 .toUri();

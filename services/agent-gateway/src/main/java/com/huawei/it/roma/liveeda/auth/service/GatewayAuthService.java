@@ -11,6 +11,7 @@ import com.huawei.it.roma.liveeda.auth.domain.IssuedToken;
 import com.huawei.it.roma.liveeda.auth.domain.PendingAuthTransaction;
 import com.huawei.it.roma.liveeda.auth.domain.PendingBaseLogin;
 import com.huawei.it.roma.liveeda.auth.domain.UserAuthorizationResult;
+import java.util.List;
 import com.huawei.it.roma.liveeda.auth.store.AgentRegistryStore;
 import com.huawei.it.roma.liveeda.auth.store.GatewayAuthContextStore;
 import com.huawei.it.roma.liveeda.auth.store.GatewaySessionStore;
@@ -88,7 +89,7 @@ public class GatewayAuthService {
         }
         String gwState = idGenerator.next("gw_state");
         pendingAuthTransactionStore.save(transaction.withGwState(gwState));
-        return idaasAuthorizeSupport.buildConsentAuthorizationUri(gwState, transaction.requiredPolicyCodes());
+        return idaasAuthorizeSupport.buildConsentAuthorizationUri(gwState, transaction.requiredPermissionPointCodes());
     }
 
     public URI handleConsentCallback(String code, String gwState) {
@@ -98,6 +99,10 @@ public class GatewayAuthService {
 
         AgentRegistryEntry agentRegistryEntry = agentRegistryStore.require(transaction.agentId());
         UserAuthorizationResult authorizationResult = idaasTokenClient.exchangeConsentCode(code);
+        List<com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint> authorizedPermissionPoints =
+                authorizationResult.authorizedPermissionPoints() == null || authorizationResult.authorizedPermissionPoints().isEmpty()
+                        ? transaction.requiredPermissionPoints()
+                        : authorizationResult.authorizedPermissionPoints();
         IssuedToken t1 = iamAssumeAgentTokenClient.assumeAgentToken(agentRegistryEntry);
         IssuedToken tr = iamResourceTokenClient.issueResourceToken(agentRegistryEntry, authorizationResult, t1);
 
@@ -107,7 +112,7 @@ public class GatewayAuthService {
                 authorizationResult.accessToken(),
                 t1.accessToken(),
                 tr.accessToken(),
-                authorizationResult.consentedPolicyCodes(),
+                authorizedPermissionPoints,
                 tr.expiresAt()
         ));
 

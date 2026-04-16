@@ -30,7 +30,7 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
                                 "assume_agent_token",
                                 new AssumeAgentTokenAttributes(
                                         agentRegistryEntry.agentServiceAccount(),
-                                        agentRegistryEntry.principal(),
+                                        agentRegistryEntry.appId(),
                                         agentRegistryEntry.agentId()
                                 )
                         )
@@ -49,11 +49,17 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
     private record AssumeAgentTokenData(String type, AssumeAgentTokenAttributes attributes) {
     }
 
-    private record AssumeAgentTokenAttributes(String agentServiceAccount, String principal, String agentId) {
+    private record AssumeAgentTokenAttributes(String agentServiceAccount, String appId, String agentId) {
         @Override
         @JsonProperty("agent_service_account")
         public String agentServiceAccount() {
             return agentServiceAccount;
+        }
+
+        @Override
+        @JsonProperty("app_id")
+        public String appId() {
+            return appId;
         }
 
         @Override

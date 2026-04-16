@@ -13,24 +13,50 @@ management:
 
 policy-center:
   catalog:
-    policies:
-      - code: erp:report:read
-        display-name: Read report data
-      - code: erp:report:category:list
-        display-name: List report categories
-      - code: erp:invoice:read
-        display-name: Read invoice data
+    permission-points:
+      - code: erp:report:r
+        display-name-zh: ERP 报表的可读权限
+        description: 允许读取 ERP 报表数据
+        bound-tools:
+          - mcp:financial-report-server/query_monthly_report
+        status: ACTIVE
+      - code: erp:contract:r
+        display-name-zh: ERP 合同的可读权限
+        description: 允许读取 ERP 合同数据
+        bound-tools:
+          - mcp:contract-server/get_contract
+        status: ACTIVE
+      - code: erp:invoice:r
+        display-name-zh: ERP 发票的可读权限
+        description: 允许读取 ERP 发票数据
+        bound-tools:
+          - mcp:invoice-server/query_invoices
+        status: ACTIVE
     tools:
       - id: mcp:financial-report-server/query_monthly_report
-        display-name: Query monthly report
-      - id: mcp:financial-report-server/list_report_categories
-        display-name: List report categories
+        display-name-zh: 查询月度报表
+      - id: mcp:contract-server/get_contract
+        display-name-zh: 查询合同详情
       - id: mcp:invoice-server/query_invoices
-        display-name: Query invoices
-    mappings:
-      - tool-id: mcp:financial-report-server/query_monthly_report
-        policy-code: erp:report:read
-      - tool-id: mcp:financial-report-server/list_report_categories
-        policy-code: erp:report:category:list
-      - tool-id: mcp:invoice-server/query_invoices
-        policy-code: erp:invoice:read
+        display-name-zh: 查询发票
+    agent-strategies:
+      - strategy-id: stg_contract_permit_demo_user
+        agent-id: agt_business_001
+        permission-point-code: erp:contract:r
+        effect: PERMIT
+        status: ACTIVE
+        conditions:
+          field: subject.user_id
+          operator: in
+          values:
+            - z01062668
+      - strategy-id: stg_invoice_deny_blocked_user
+        agent-id: agt_business_001
+        permission-point-code: erp:invoice:r
+        effect: DENY
+        status: ACTIVE
+        conditions:
+          field: subject.user_id
+          operator: in
+          values:
+            - blocked_demo_user

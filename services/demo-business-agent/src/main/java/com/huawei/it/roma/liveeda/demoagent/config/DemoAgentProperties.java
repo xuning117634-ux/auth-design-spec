@@ -14,6 +14,9 @@ public class DemoAgentProperties {
     private String gatewayBaseUrl;
 
     @NotBlank
+    private String policyCenterBaseUrl;
+
+    @NotBlank
     private String selfBaseUrl;
 
     @NotBlank

@@ -12,9 +12,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.it.roma.liveeda.auth.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.auth.client.PolicyResolutionResult;
+import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.web.ResourceTokenRequest;
 import jakarta.servlet.http.Cookie;
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,6 +37,9 @@ import org.springframework.web.util.UriComponentsBuilder;
 @ActiveProfiles("mock")
 class AgentGatewayFlowTest {
 
+    private static final AuthorizedPermissionPoint CONTRACT_READ_PERMISSION =
+            new AuthorizedPermissionPoint("erp:contract:r", "ERP 合同的可读权限");
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -47,7 +52,9 @@ class AgentGatewayFlowTest {
     @Test
     void shouldCompleteBaseLoginAndConsentThenReuseTr() throws Exception {
         when(policyCenterClient.resolveByTools(eq("agt_business_001"), anySet()))
-                .thenReturn(new PolicyResolutionResult(Set.of("POLICY_REPORT_READ")));
+                .thenReturn(new PolicyResolutionResult(Set.of("erp:contract:r"), List.of(CONTRACT_READ_PERMISSION)));
+        when(policyCenterClient.resolveByCodes(anySet()))
+                .thenReturn(List.of(CONTRACT_READ_PERMISSION));
 
         MvcResult startLoginResult = mockMvc.perform(get("/gw/auth/login")
                         .param("agent_id", "agt_business_001")
@@ -86,10 +93,7 @@ class AgentGatewayFlowTest {
 
         ResourceTokenRequest resourceTokenRequest = new ResourceTokenRequest(
                 "agt_business_001",
-                java.util.List.of(
-                        "mcp:financial-report-server/list_report_categories",
-                        "mcp:financial-report-server/query_monthly_report"
-                ),
+                List.of("mcp:contract-server/get_contract"),
                 "http://localhost:18082/agent.html",
                 "outer_chat_state"
         );
@@ -104,7 +108,9 @@ class AgentGatewayFlowTest {
                 .andExpect(jsonPath("$.redirectUrl").isNotEmpty())
                 .andReturn();
 
-        String authorizeRedirectUrl = objectMapper.readTree(firstTokenResult.getResponse().getContentAsString()).get("redirectUrl").asText();
+        String authorizeRedirectUrl = objectMapper.readTree(firstTokenResult.getResponse().getContentAsString())
+                .get("redirectUrl")
+                .asText();
         URI authorizeUri = URI.create(authorizeRedirectUrl);
         String requestId = queryParams(authorizeUri).get("request_id");
 

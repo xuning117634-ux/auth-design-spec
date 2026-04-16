@@ -8,7 +8,7 @@ public record TrCacheEntry(
         String agentId,
         String currentTr,
         Set<String> coveredTools,
-        Set<String> coveredPolicyCodes,
+        Set<String> coveredPermissionPointCodes,
         Instant expiresAt
 ) {
     public boolean covers(Set<String> requiredTools, Instant now) {

@@ -23,6 +23,10 @@ public class TrCacheStore {
         return Optional.ofNullable(cache.getIfPresent(key(siteSessionId, agentId)));
     }
 
+    public void delete(String siteSessionId, String agentId) {
+        cache.invalidate(key(siteSessionId, agentId));
+    }
+
     private String key(String siteSessionId, String agentId) {
         return siteSessionId + "::" + agentId;
     }

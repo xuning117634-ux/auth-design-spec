@@ -4,6 +4,6 @@ import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 
 public record ResolveByCodesRequest(
-        @NotEmpty List<String> policyCodes
+        @NotEmpty List<String> permissionPointCodes
 ) {
 }
