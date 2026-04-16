@@ -38,3 +38,8 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Local-only work directories ###
+/docs/tem_final_design/
+/finance_thesis_public/
+/temptest/
