@@ -69,8 +69,8 @@ class DemoAgentServiceTest {
         when(mockMcpGatewayClient.invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString()))
                 .thenReturn("模拟的合同查询结果");
 
-        ChatResponse first = demoAgentService.handleChat(siteSession.siteSessionId(), "请帮我看一下这个合同");
-        ChatResponse second = demoAgentService.handleChat(siteSession.siteSessionId(), "继续看一下这个合同");
+        ChatResponse first = demoAgentService.handleChat(siteSession.siteSessionId(), "请帮我看一下ERP合同");
+        ChatResponse second = demoAgentService.handleChat(siteSession.siteSessionId(), "继续看一下ERP合同");
 
         assertEquals("answer", first.status());
         assertEquals("gateway", first.source());
