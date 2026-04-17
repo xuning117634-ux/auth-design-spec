@@ -77,6 +77,41 @@ flowchart LR
 - `MCP 网关` 运行时先基于 `TR.authorizedPermissionPoints` 做权限点范围校验，再查询策略中心执行 Agent 策略判断
 - `MCP 网关` 最终再路由到对应 `MCP 服务`
 
+### 3.1 适合对外讲解的简化主流程
+
+下面这张图故意不展开 `Tc / T1 / TR`、`request_id / gw_state` 等内部细节，只保留对外最容易讲清楚的主链路：
+
+```mermaid
+sequenceDiagram
+    participant 用户 as 用户
+    participant Agent as 业务 Agent
+    participant GW as Agent 网关
+    participant IDaaS as IDaaS
+    participant MCP as MCP 网关
+
+    用户->>Agent: 打开 Agent 页面
+    Agent-->>用户: 未登录则跳到网关
+    用户->>GW: 访问网关登录入口
+    GW-->>用户: 跳到 IDaaS
+    用户->>IDaaS: 完成登录
+    IDaaS-->>GW: 回调到网关
+    GW-->>Agent: 带回 gw_session_token
+    Agent->>Agent: 建立本地 site_session
+
+    用户->>Agent: 发起业务请求
+    Agent->>GW: 提交 gw_session_token + required_tools
+    GW-->>Agent: 直接返回 TR 或引导用户补充授权后返回 TR
+    Agent->>MCP: 带 TR 调用工具
+    MCP-->>Agent: 返回结果
+    Agent-->>用户: 返回答案
+```
+
+这张图适合开会时先讲清楚三件事：
+
+- 登录统一由网关承接
+- 业务 Agent 只上传 `required_tools`
+- 业务 Agent 后续找网关申请 `TR` 时，要带上 `gw_session_token`
+
 ## 4. 关键概念
 
 ### 4.1 Agent Registry（Agent 注册表）
@@ -141,6 +176,55 @@ base 登录完成后，网关通过 `return_url` 带回业务 Agent：
 gw_session_token → 对应网关侧 gw_session_id 的不透明引用
 ```
 
+它的作用不是替代 `TR`，而是把“网关已经确认过的登录用户”交接给业务 Agent。业务 Agent 后续建立本地站点会话、以及向网关申请 `TR` 时，都依赖这个值把自己的网站会话和网关侧登录用户绑定起来。
+
+一个最直观的例子如下：
+
+```text
+网关侧：
+  gw_session_id = gws_123
+  gw_session = {
+    gw_session_id: gws_123,
+    user_id: z01062668,
+    username: 张三
+  }
+
+  gw_session_token = gwst_abc_xyz
+  gw_session_token -> gws_123
+
+业务 Agent 侧：
+  site_session_id = site_789
+  site_session = {
+    site_session_id: site_789,
+    gw_session_token: gwst_abc_xyz,
+    user_id: z01062668,
+    username: 张三
+  }
+```
+
+浏览器此时会同时持有两套不同域名下的 Cookie：
+
+```text
+业务 Agent 域名下：
+  site_session_id = site_789
+
+Agent 网关域名下：
+  gw_session_id = gws_123
+```
+
+它们之间的关系可以概括为：
+
+```text
+site_session_id -> site_session
+site_session -> gw_session_token -> gw_session
+```
+
+所以：
+
+- 业务 Agent 用 `site_session_id` 找到自己的本地站点会话
+- 业务 Agent 再通过 `gw_session_token` 让网关找回“这是哪个已登录用户”
+- `gw_session_token` 是网关和业务 Agent 之间的登录用户桥接凭证，不是资源访问令牌
+
 ### 4.5 gw_auth_context（网关侧授权上下文）
 
 业务授权成功后由网关创建：
@@ -203,7 +287,7 @@ sequenceDiagram
         IDaaS-->>GW: 返回 base 登录结果
         GW-->>用户: 带 gw_session_token 回业务 Agent
         用户->>Agent: 回原页面
-        Agent->>Agent: 建立 site_session
+        Agent->>Agent: 建立 site_session\n(site_session_id -> gw_session_token)
     else 已有站点登录态
         Agent-->>用户: 直接返回聊天页
     end
@@ -234,7 +318,7 @@ sequenceDiagram
         MCP网关-->>Agent: 返回数据
         Agent-->>用户: 返回答案
     else 本地无 TR / 过期 / 覆盖不足
-        Agent->>GW: POST /gw/token/resource-token {agent_id, required_tools, return_url, state}
+        Agent->>GW: POST /gw/token/resource-token {gw_session_token, agent_id, required_tools, return_url, state}
         GW->>PC: resolve-by-tools(required_tools)
         PC-->>GW: 返回 requiredPermissionPointCodes
 
@@ -252,7 +336,7 @@ sequenceDiagram
             GW->>IAM: 申请 TR
             GW-->>用户: 回业务 Agent
             用户->>Agent: 恢复原请求
-            Agent->>GW: 再次取 TR
+            Agent->>GW: 再次取 TR\n(仍带 gw_session_token + request_id)
             GW-->>Agent: 返回 TR
         end
 
