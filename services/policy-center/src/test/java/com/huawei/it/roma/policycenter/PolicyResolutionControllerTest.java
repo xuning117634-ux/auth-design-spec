@@ -95,7 +95,7 @@ class PolicyResolutionControllerTest {
     }
 
     @Test
-    void shouldDisablePermissionPointFromRuntimeIndexes() throws Exception {
+    void shouldDisablePermissionPointFromRuntimeQueries() throws Exception {
         mockMvc.perform(put("/internal/v1/permission-points/batch-upsert")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -107,7 +107,10 @@ class PolicyResolutionControllerTest {
                                       "displayNameZh": "ERP 合同的可读权限",
                                       "description": "允许读取 ERP 合同数据",
                                       "boundTools": [
-                                        "mcp:contract-server/get_contract"
+                                        {
+                                          "toolId": "mcp:contract-server/get_contract",
+                                          "displayNameZh": "查询合同详情"
+                                        }
                                       ],
                                       "status": "INACTIVE"
                                     }
@@ -155,7 +158,10 @@ class PolicyResolutionControllerTest {
                                       "displayNameZh": "ERP 合同的可读权限",
                                       "description": "允许读取 ERP 合同数据",
                                       "boundTools": [
-                                        "mcp:contract-server/get_contract"
+                                        {
+                                          "toolId": "mcp:contract-server/get_contract",
+                                          "displayNameZh": "查询合同详情"
+                                        }
                                       ],
                                       "status": "INACTIVE"
                                     }
@@ -175,7 +181,10 @@ class PolicyResolutionControllerTest {
                                       "displayNameZh": "ERP 合同的可读权限",
                                       "description": "允许读取 ERP 合同数据",
                                       "boundTools": [
-                                        "mcp:contract-server/get_contract"
+                                        {
+                                          "toolId": "mcp:contract-server/get_contract",
+                                          "displayNameZh": "查询合同详情"
+                                        }
                                       ],
                                       "status": "ACTIVE"
                                     }

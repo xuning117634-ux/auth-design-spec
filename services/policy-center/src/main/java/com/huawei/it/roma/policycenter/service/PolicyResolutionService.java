@@ -1,10 +1,19 @@
 package com.huawei.it.roma.policycenter.service;
 
-import com.huawei.it.roma.policycenter.config.PolicyCatalogProperties;
 import com.huawei.it.roma.policycenter.domain.AgentStrategyItem;
 import com.huawei.it.roma.policycenter.domain.PermissionPointItem;
 import com.huawei.it.roma.policycenter.domain.StrategyCondition;
 import com.huawei.it.roma.policycenter.domain.ToolItem;
+import com.huawei.it.roma.policycenter.persistence.mapper.AgentStrategyMapper;
+import com.huawei.it.roma.policycenter.persistence.mapper.PermissionPointMapper;
+import com.huawei.it.roma.policycenter.persistence.mapper.PermissionPointToolRelMapper;
+import com.huawei.it.roma.policycenter.persistence.mapper.StrategyConditionValueMapper;
+import com.huawei.it.roma.policycenter.persistence.mapper.ToolMapper;
+import com.huawei.it.roma.policycenter.persistence.model.AgentStrategyRow;
+import com.huawei.it.roma.policycenter.persistence.model.PermissionPointRow;
+import com.huawei.it.roma.policycenter.persistence.model.PermissionPointToolRelRow;
+import com.huawei.it.roma.policycenter.persistence.model.StrategyConditionValueRow;
+import com.huawei.it.roma.policycenter.persistence.model.ToolRow;
 import com.huawei.it.roma.policycenter.web.AgentStrategyBatchUpsertRequest;
 import com.huawei.it.roma.policycenter.web.AgentStrategyBatchUpsertResponse;
 import com.huawei.it.roma.policycenter.web.PermissionPointBatchUpsertRequest;
@@ -12,16 +21,17 @@ import com.huawei.it.roma.policycenter.web.PermissionPointBatchUpsertResponse;
 import com.huawei.it.roma.policycenter.web.QueryAgentStrategiesResponse;
 import com.huawei.it.roma.policycenter.web.ResolveByCodesResponse;
 import com.huawei.it.roma.policycenter.web.ResolveByToolsResponse;
-import jakarta.annotation.PostConstruct;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 @Service
@@ -32,310 +42,330 @@ public class PolicyResolutionService {
     private static final Set<String> SUPPORTED_STATUSES = Set.of(STATUS_ACTIVE, STATUS_INACTIVE);
     private static final Set<String> SUPPORTED_EFFECTS = Set.of("PERMIT", "DENY");
     private static final Set<String> SUPPORTED_OPERATORS = Set.of("equals", "in");
+    private static final String SUPPORTED_CONDITION_FIELD = "subject.user_id";
 
-    private final PolicyCatalogProperties policyCatalogProperties;
+    private final PermissionPointMapper permissionPointMapper;
+    private final ToolMapper toolMapper;
+    private final PermissionPointToolRelMapper permissionPointToolRelMapper;
+    private final AgentStrategyMapper agentStrategyMapper;
+    private final StrategyConditionValueMapper strategyConditionValueMapper;
 
-    private final Map<String, ToolItem> toolsById = new LinkedHashMap<>();
-    private final Map<String, StoredPermissionPoint> storedPermissionPointsByCode = new LinkedHashMap<>();
-    private final Map<String, Map<String, StoredAgentStrategy>> storedStrategiesByAgentId = new LinkedHashMap<>();
-
-    private final Map<String, PermissionPointItem> activePermissionPointsByCode = new LinkedHashMap<>();
-    private final Map<String, Set<String>> activeToolToPermissionPoints = new LinkedHashMap<>();
-    private final Map<String, Set<String>> activePermissionPointToTools = new LinkedHashMap<>();
-    private final Map<String, List<AgentStrategyItem>> activeStrategiesByAgentId = new LinkedHashMap<>();
-
-    public PolicyResolutionService(PolicyCatalogProperties policyCatalogProperties) {
-        this.policyCatalogProperties = policyCatalogProperties;
+    public PolicyResolutionService(
+            PermissionPointMapper permissionPointMapper,
+            ToolMapper toolMapper,
+            PermissionPointToolRelMapper permissionPointToolRelMapper,
+            AgentStrategyMapper agentStrategyMapper,
+            StrategyConditionValueMapper strategyConditionValueMapper
+    ) {
+        this.permissionPointMapper = permissionPointMapper;
+        this.toolMapper = toolMapper;
+        this.permissionPointToolRelMapper = permissionPointToolRelMapper;
+        this.agentStrategyMapper = agentStrategyMapper;
+        this.strategyConditionValueMapper = strategyConditionValueMapper;
     }
 
-    @PostConstruct
-    public synchronized void initialize() {
-        toolsById.clear();
-        storedPermissionPointsByCode.clear();
-        storedStrategiesByAgentId.clear();
-
-        policyCatalogProperties.getTools().forEach(definition -> {
-            String toolId = normalizeValue(definition.getId(), "tool_id");
-            toolsById.put(toolId, new ToolItem(toolId, normalizeValue(definition.getDisplayNameZh(), "display_name_zh")));
-        });
-
-        policyCatalogProperties.getPermissionPoints().forEach(definition -> {
-            StoredPermissionPoint storedPermissionPoint = toStoredPermissionPoint(
-                    definition.getCode(),
-                    definition.getDisplayNameZh(),
-                    definition.getDescription(),
-                    definition.getBoundTools(),
-                    definition.getStatus()
-            );
-            storedPermissionPointsByCode.put(storedPermissionPoint.code(), storedPermissionPoint);
-        });
-
-        policyCatalogProperties.getAgentStrategies().forEach(definition -> {
-            StoredAgentStrategy storedAgentStrategy = toStoredAgentStrategy(
-                    definition.getAgentId(),
-                    definition.getStrategyId(),
-                    definition.getPermissionPointCode(),
-                    definition.getConditions().getField(),
-                    definition.getConditions().getOperator(),
-                    definition.getConditions().getValues(),
-                    definition.getEffect(),
-                    definition.getStatus()
-            );
-            putStoredStrategy(storedAgentStrategy);
-        });
-
-        rebuildActiveIndexes();
-    }
-
-    public synchronized PermissionPointBatchUpsertResponse upsertPermissionPoints(PermissionPointBatchUpsertRequest request) {
+    @Transactional
+    public PermissionPointBatchUpsertResponse upsertPermissionPoints(PermissionPointBatchUpsertRequest request) {
         if (request == null || CollectionUtils.isEmpty(request.items())) {
             throw new PolicyResolutionException("permission point items must not be empty");
         }
-        normalizeValue(request.source(), "source");
-
-        List<StoredPermissionPoint> storedPermissionPoints = request.items().stream()
-                .map(item -> toStoredPermissionPoint(
-                        item.permissionPointCode(),
-                        item.displayNameZh(),
-                        item.description(),
-                        item.boundTools(),
-                        item.status()
-                ))
-                .sorted(Comparator.comparing(StoredPermissionPoint::code))
+        String source = normalizeValue(request.source(), "source");
+        List<NormalizedPermissionPoint> permissionPoints = request.items().stream()
+                .map(item -> normalizePermissionPoint(item, source))
+                .sorted(Comparator.comparing(NormalizedPermissionPoint::permissionPointCode))
                 .toList();
 
-        storedPermissionPoints.forEach(item -> storedPermissionPointsByCode.put(item.code(), item));
-        rebuildActiveIndexes();
+        permissionPoints.forEach(this::upsertPermissionPoint);
 
-        List<PermissionPointBatchUpsertResponse.ItemResult> results = storedPermissionPoints.stream()
-                .map(item -> new PermissionPointBatchUpsertResponse.ItemResult(item.code(), "UPSERTED"))
+        List<PermissionPointBatchUpsertResponse.ItemResult> results = permissionPoints.stream()
+                .map(item -> new PermissionPointBatchUpsertResponse.ItemResult(item.permissionPointCode(), "UPSERTED"))
                 .toList();
         return new PermissionPointBatchUpsertResponse(results.size(), results);
     }
 
-    public synchronized AgentStrategyBatchUpsertResponse upsertAgentStrategies(AgentStrategyBatchUpsertRequest request) {
+    @Transactional
+    public AgentStrategyBatchUpsertResponse upsertAgentStrategies(AgentStrategyBatchUpsertRequest request) {
         if (request == null || CollectionUtils.isEmpty(request.items())) {
             throw new PolicyResolutionException("agent strategy items must not be empty");
         }
         String agentId = normalizeValue(request.agentId(), "agent_id");
-
-        List<StoredAgentStrategy> storedStrategies = request.items().stream()
-                .map(item -> toStoredAgentStrategy(
-                        agentId,
-                        item.strategyId(),
-                        item.permissionPointCode(),
-                        item.conditions().field(),
-                        item.conditions().operator(),
-                        item.conditions().values(),
-                        item.effect(),
-                        item.status()
-                ))
-                .sorted(Comparator.comparing(StoredAgentStrategy::strategyId))
+        List<NormalizedAgentStrategy> strategies = request.items().stream()
+                .map(item -> normalizeAgentStrategy(agentId, item))
+                .sorted(Comparator.comparing(NormalizedAgentStrategy::strategyId))
                 .toList();
 
-        storedStrategies.forEach(this::putStoredStrategy);
-        rebuildActiveIndexes();
+        ensurePermissionPointsExist(strategies.stream()
+                .map(NormalizedAgentStrategy::permissionPointCode)
+                .distinct()
+                .sorted()
+                .toList());
 
-        List<AgentStrategyBatchUpsertResponse.ItemResult> results = storedStrategies.stream()
+        strategies.forEach(this::upsertAgentStrategy);
+
+        List<AgentStrategyBatchUpsertResponse.ItemResult> results = strategies.stream()
                 .map(item -> new AgentStrategyBatchUpsertResponse.ItemResult(item.strategyId(), "UPSERTED"))
                 .toList();
         return new AgentStrategyBatchUpsertResponse(agentId, results.size(), results);
     }
 
-    public synchronized ResolveByToolsResponse resolveByTools(List<String> requiredTools) {
+    public ResolveByToolsResponse resolveByTools(List<String> requiredTools) {
         List<String> stableTools = sanitizeAndSort(requiredTools, "required_tools");
-        stableTools.forEach(this::requireTool);
+        ensureToolsExist(stableTools);
 
-        List<String> requiredPermissionPointCodes = stableTools.stream()
-                .map(toolId -> activeToolToPermissionPoints.getOrDefault(toolId, Set.of()))
-                .flatMap(Collection::stream)
+        List<PermissionPointToolRelRow> relationRows = permissionPointToolRelMapper.findActiveByToolIds(stableTools);
+        Map<String, List<PermissionPointToolRelRow>> relationsByToolId = relationRows.stream()
+                .collect(Collectors.groupingBy(
+                        PermissionPointToolRelRow::getToolId,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+        stableTools.forEach(toolId -> {
+            if (!relationsByToolId.containsKey(toolId)) {
+                throw new PolicyResolutionException("No active permission point mapping found for tool_id: " + toolId);
+            }
+        });
+
+        List<String> permissionPointCodes = relationRows.stream()
+                .map(PermissionPointToolRelRow::getPermissionPointCode)
                 .distinct()
                 .sorted()
                 .toList();
+        List<PermissionPointRow> permissionPointRows = permissionPointMapper.findActiveByCodes(permissionPointCodes);
+        Map<String, PermissionPointRow> permissionPointsByCode = permissionPointRows.stream()
+                .collect(Collectors.toMap(PermissionPointRow::getPermissionPointCode, row -> row));
+        permissionPointCodes.forEach(code -> {
+            if (!permissionPointsByCode.containsKey(code)) {
+                throw new PolicyResolutionException("Unknown or inactive permission_point_code: " + code);
+            }
+        });
 
-        if (requiredPermissionPointCodes.isEmpty()) {
-            throw new PolicyResolutionException("No active permission point mapping found for tools: " + stableTools);
-        }
-
-        List<PermissionPointItem> permissionPoints = requiredPermissionPointCodes.stream()
-                .map(this::requireActivePermissionPoint)
-                .sorted(Comparator.comparing(PermissionPointItem::code))
+        List<PermissionPointItem> permissionPoints = permissionPointCodes.stream()
+                .map(permissionPointsByCode::get)
+                .map(this::toPermissionPointItem)
                 .toList();
-
-        return new ResolveByToolsResponse(requiredPermissionPointCodes, permissionPoints);
+        return new ResolveByToolsResponse(permissionPointCodes, permissionPoints);
     }
 
-    public synchronized ResolveByCodesResponse resolveByCodes(List<String> permissionPointCodes) {
+    public ResolveByCodesResponse resolveByCodes(List<String> permissionPointCodes) {
         List<String> stableCodes = sanitizeAndSort(permissionPointCodes, "permission_point_codes");
-        stableCodes.forEach(this::requireActivePermissionPointCode);
+        Map<String, PermissionPointRow> permissionPointsByCode = loadActivePermissionPoints(stableCodes);
 
-        List<ToolItem> tools = stableCodes.stream()
-                .map(code -> activePermissionPointToTools.getOrDefault(code, Set.of()))
-                .flatMap(Collection::stream)
-                .distinct()
-                .sorted()
-                .map(this::requireTool)
-                .sorted(Comparator.comparing(ToolItem::toolId))
+        List<PermissionPointToolRelRow> relationRows = permissionPointToolRelMapper.findActiveByPermissionPointCodes(stableCodes);
+        Map<String, List<PermissionPointToolRelRow>> relationsByPermissionPointCode = relationRows.stream()
+                .collect(Collectors.groupingBy(
+                        PermissionPointToolRelRow::getPermissionPointCode,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+        stableCodes.forEach(code -> {
+            if (!relationsByPermissionPointCode.containsKey(code)) {
+                throw new PolicyResolutionException("No active tool mapping found for permission_point_code: " + code);
+            }
+        });
+
+        List<ToolRow> toolRows = toolMapper.findActiveToolsByPermissionPointCodes(stableCodes);
+        List<ToolItem> tools = toolRows.stream()
+                .sorted(Comparator.comparing(ToolRow::getToolId))
+                .map(this::toToolItem)
                 .toList();
-
         if (tools.isEmpty()) {
             throw new PolicyResolutionException("No active tool mapping found for permission_point_codes: " + stableCodes);
         }
 
         List<PermissionPointItem> permissionPoints = stableCodes.stream()
-                .map(this::requireActivePermissionPoint)
-                .sorted(Comparator.comparing(PermissionPointItem::code))
+                .map(permissionPointsByCode::get)
+                .map(this::toPermissionPointItem)
                 .toList();
-
         return new ResolveByCodesResponse(stableCodes, permissionPoints, tools);
     }
 
-    public synchronized QueryAgentStrategiesResponse queryAgentStrategies(String agentId, List<String> permissionPointCodes) {
-        String sanitizedAgentId = normalizeValue(agentId, "agent_id");
-        List<String> stableCodes = sanitizeAndSort(permissionPointCodes, "permission_point_codes");
-        stableCodes.forEach(this::requireActivePermissionPointCode);
-
-        List<AgentStrategyItem> strategies = activeStrategiesByAgentId
-                .getOrDefault(sanitizedAgentId, List.of())
-                .stream()
-                .filter(strategy -> stableCodes.contains(strategy.permissionPointCode()))
-                .sorted(Comparator.comparing(AgentStrategyItem::permissionPointCode)
-                        .thenComparing(AgentStrategyItem::strategyId))
-                .toList();
-
-        return new QueryAgentStrategiesResponse(sanitizedAgentId, stableCodes, strategies);
-    }
-
-    private StoredPermissionPoint toStoredPermissionPoint(
-            String code,
-            String displayNameZh,
-            String description,
-            List<String> boundTools,
-            String status
-    ) {
-        String normalizedCode = normalizeValue(code, "permission_point_code");
-        List<String> sanitizedTools = sanitizeAndSort(boundTools, "bound_tools");
-        sanitizedTools.forEach(this::requireTool);
-        return new StoredPermissionPoint(
-                normalizedCode,
-                normalizeValue(displayNameZh, "display_name_zh"),
-                normalizeValue(description, "description"),
-                sanitizedTools,
-                normalizeStatus(status)
-        );
-    }
-
-    private StoredAgentStrategy toStoredAgentStrategy(
-            String agentId,
-            String strategyId,
-            String permissionPointCode,
-            String field,
-            String operator,
-            List<String> values,
-            String effect,
-            String status
-    ) {
+    public QueryAgentStrategiesResponse queryAgentStrategies(String agentId, List<String> permissionPointCodes) {
         String normalizedAgentId = normalizeValue(agentId, "agent_id");
-        String normalizedPermissionPointCode = normalizeValue(permissionPointCode, "permission_point_code");
-        requireStoredPermissionPoint(normalizedPermissionPointCode);
-        StrategyCondition condition = new StrategyCondition(
-                normalizeConditionField(field),
-                normalizeOperator(operator),
-                sanitizeAndSort(values, "condition_values")
-        );
-        return new StoredAgentStrategy(
-                normalizeValue(strategyId, "strategy_id"),
+        List<String> stableCodes = sanitizeAndSort(permissionPointCodes, "permission_point_codes");
+        loadActivePermissionPoints(stableCodes);
+
+        List<AgentStrategyRow> strategyRows = agentStrategyMapper.findActiveByAgentIdAndPermissionPointCodes(
                 normalizedAgentId,
-                normalizedPermissionPointCode,
-                condition,
-                normalizeEffect(effect),
-                normalizeStatus(status)
+                stableCodes
+        );
+        if (strategyRows.isEmpty()) {
+            return new QueryAgentStrategiesResponse(normalizedAgentId, stableCodes, List.of());
+        }
+
+        List<String> strategyIds = strategyRows.stream()
+                .map(AgentStrategyRow::getStrategyId)
+                .distinct()
+                .sorted()
+                .toList();
+        Map<String, List<String>> conditionValuesByStrategyId = strategyConditionValueMapper.findByStrategyIds(strategyIds).stream()
+                .collect(Collectors.groupingBy(
+                        StrategyConditionValueRow::getStrategyId,
+                        LinkedHashMap::new,
+                        Collectors.mapping(StrategyConditionValueRow::getConditionValue, Collectors.toList())
+                ));
+
+        List<AgentStrategyItem> strategies = strategyRows.stream()
+                .sorted(Comparator.comparing(AgentStrategyRow::getPermissionPointCode)
+                        .thenComparing(AgentStrategyRow::getStrategyId))
+                .map(row -> new AgentStrategyItem(
+                        row.getStrategyId(),
+                        row.getAgentId(),
+                        row.getPermissionPointCode(),
+                        new StrategyCondition(
+                                row.getConditionField(),
+                                row.getConditionOperator(),
+                                List.copyOf(conditionValuesByStrategyId.getOrDefault(row.getStrategyId(), List.of()))
+                        ),
+                        row.getEffect(),
+                        row.getStatus()
+                ))
+                .toList();
+        return new QueryAgentStrategiesResponse(normalizedAgentId, stableCodes, strategies);
+    }
+
+    private void upsertPermissionPoint(NormalizedPermissionPoint permissionPoint) {
+        PermissionPointRow permissionPointRow = new PermissionPointRow(
+                permissionPoint.permissionPointCode(),
+                permissionPoint.displayNameZh(),
+                permissionPoint.description(),
+                permissionPoint.status(),
+                permissionPoint.source()
+        );
+        if (permissionPointMapper.update(permissionPointRow) == 0) {
+            permissionPointMapper.insert(permissionPointRow);
+        }
+
+        permissionPoint.boundTools().forEach(this::upsertTool);
+        permissionPointToolRelMapper.deleteByPermissionPointCode(permissionPoint.permissionPointCode());
+        List<PermissionPointToolRelRow> relations = permissionPoint.boundTools().stream()
+                .map(tool -> new PermissionPointToolRelRow(permissionPoint.permissionPointCode(), tool.toolId()))
+                .toList();
+        permissionPointToolRelMapper.insertBatch(relations);
+    }
+
+    private void upsertTool(NormalizedBoundTool tool) {
+        ToolRow toolRow = new ToolRow(tool.toolId(), tool.displayNameZh());
+        if (toolMapper.update(toolRow) == 0) {
+            toolMapper.insert(toolRow);
+        }
+    }
+
+    private void upsertAgentStrategy(NormalizedAgentStrategy strategy) {
+        AgentStrategyRow strategyRow = new AgentStrategyRow(
+                strategy.strategyId(),
+                strategy.agentId(),
+                strategy.permissionPointCode(),
+                strategy.conditionField(),
+                strategy.conditionOperator(),
+                strategy.effect(),
+                strategy.status()
+        );
+        if (agentStrategyMapper.update(strategyRow) == 0) {
+            agentStrategyMapper.insert(strategyRow);
+        }
+
+        strategyConditionValueMapper.deleteByStrategyId(strategy.strategyId());
+        List<StrategyConditionValueRow> values = new ArrayList<>();
+        for (int index = 0; index < strategy.conditionValues().size(); index++) {
+            values.add(new StrategyConditionValueRow(
+                    strategy.strategyId(),
+                    index,
+                    strategy.conditionValues().get(index)
+            ));
+        }
+        strategyConditionValueMapper.insertBatch(values);
+    }
+
+    private NormalizedPermissionPoint normalizePermissionPoint(
+            PermissionPointBatchUpsertRequest.Item item,
+            String source
+    ) {
+        return new NormalizedPermissionPoint(
+                normalizeValue(item.permissionPointCode(), "permission_point_code"),
+                normalizeValue(item.displayNameZh(), "display_name_zh"),
+                normalizeValue(item.description(), "description"),
+                normalizeBoundTools(item.boundTools()),
+                normalizeStatus(item.status()),
+                source
         );
     }
 
-    private void putStoredStrategy(StoredAgentStrategy storedAgentStrategy) {
-        storedStrategiesByAgentId
-                .computeIfAbsent(storedAgentStrategy.agentId(), ignored -> new LinkedHashMap<>())
-                .put(storedAgentStrategy.strategyId(), storedAgentStrategy);
+    private List<NormalizedBoundTool> normalizeBoundTools(List<PermissionPointBatchUpsertRequest.BoundTool> boundTools) {
+        if (CollectionUtils.isEmpty(boundTools)) {
+            throw new PolicyResolutionException("bound_tools must not be empty");
+        }
+        Map<String, NormalizedBoundTool> toolsById = new TreeMap<>();
+        boundTools.forEach(tool -> {
+            String toolId = normalizeValue(tool.toolId(), "bound_tools.tool_id");
+            String displayNameZh = normalizeValue(tool.displayNameZh(), "bound_tools.display_name_zh");
+            toolsById.put(toolId, new NormalizedBoundTool(toolId, displayNameZh));
+        });
+        if (toolsById.isEmpty()) {
+            throw new PolicyResolutionException("bound_tools must not be empty");
+        }
+        return List.copyOf(toolsById.values());
     }
 
-    private void rebuildActiveIndexes() {
-        activePermissionPointsByCode.clear();
-        activeToolToPermissionPoints.clear();
-        activePermissionPointToTools.clear();
-        activeStrategiesByAgentId.clear();
+    private NormalizedAgentStrategy normalizeAgentStrategy(
+            String agentId,
+            AgentStrategyBatchUpsertRequest.Item item
+    ) {
+        return new NormalizedAgentStrategy(
+                normalizeValue(item.strategyId(), "strategy_id"),
+                agentId,
+                normalizeValue(item.permissionPointCode(), "permission_point_code"),
+                normalizeConditionField(item.conditions().field()),
+                normalizeOperator(item.conditions().operator()),
+                sanitizeAndSort(item.conditions().values(), "condition_values"),
+                normalizeEffect(item.effect()),
+                normalizeStatus(item.status())
+        );
+    }
 
-        storedPermissionPointsByCode.values().stream()
-                .filter(permissionPoint -> STATUS_ACTIVE.equals(permissionPoint.status()))
-                .sorted(Comparator.comparing(StoredPermissionPoint::code))
-                .forEach(permissionPoint -> {
-                    PermissionPointItem permissionPointItem = new PermissionPointItem(
-                            permissionPoint.code(),
-                            permissionPoint.displayNameZh()
-                    );
-                    activePermissionPointsByCode.put(permissionPoint.code(), permissionPointItem);
-                    permissionPoint.boundTools().forEach(toolId -> {
-                        activeToolToPermissionPoints
-                                .computeIfAbsent(toolId, ignored -> new LinkedHashSet<>())
-                                .add(permissionPoint.code());
-                        activePermissionPointToTools
-                                .computeIfAbsent(permissionPoint.code(), ignored -> new LinkedHashSet<>())
-                                .add(toolId);
-                    });
-                });
+    private Map<String, PermissionPointRow> loadActivePermissionPoints(List<String> permissionPointCodes) {
+        List<PermissionPointRow> rows = permissionPointMapper.findActiveByCodes(permissionPointCodes);
+        Map<String, PermissionPointRow> rowsByCode = rows.stream()
+                .collect(Collectors.toMap(PermissionPointRow::getPermissionPointCode, row -> row));
+        permissionPointCodes.forEach(code -> {
+            if (!rowsByCode.containsKey(code)) {
+                throw new PolicyResolutionException("Unknown or inactive permission_point_code: " + code);
+            }
+        });
+        return rowsByCode;
+    }
 
-        storedStrategiesByAgentId.forEach((agentId, strategiesById) -> {
-            List<AgentStrategyItem> activeStrategies = strategiesById.values().stream()
-                    .filter(strategy -> STATUS_ACTIVE.equals(strategy.status()))
-                    .filter(strategy -> activePermissionPointsByCode.containsKey(strategy.permissionPointCode()))
-                    .map(strategy -> new AgentStrategyItem(
-                            strategy.strategyId(),
-                            strategy.agentId(),
-                            strategy.permissionPointCode(),
-                            strategy.conditions(),
-                            strategy.effect(),
-                            strategy.status()
-                    ))
-                    .sorted(Comparator.comparing(AgentStrategyItem::permissionPointCode)
-                            .thenComparing(AgentStrategyItem::strategyId))
-                    .toList();
-            if (!activeStrategies.isEmpty()) {
-                activeStrategiesByAgentId.put(agentId, activeStrategies);
+    private void ensurePermissionPointsExist(List<String> permissionPointCodes) {
+        List<PermissionPointRow> rows = permissionPointMapper.findByCodes(permissionPointCodes);
+        Set<String> existingCodes = rows.stream()
+                .map(PermissionPointRow::getPermissionPointCode)
+                .collect(Collectors.toSet());
+        permissionPointCodes.forEach(code -> {
+            if (!existingCodes.contains(code)) {
+                throw new PolicyResolutionException("Unknown permission_point_code: " + code);
             }
         });
     }
 
-    private PermissionPointItem requireStoredPermissionPoint(String code) {
-        StoredPermissionPoint permissionPoint = storedPermissionPointsByCode.get(code);
-        if (permissionPoint == null) {
-            throw new PolicyResolutionException("Unknown permission_point_code: " + code);
-        }
-        return new PermissionPointItem(permissionPoint.code(), permissionPoint.displayNameZh());
+    private void ensureToolsExist(List<String> toolIds) {
+        Set<String> existingToolIds = new LinkedHashSet<>(toolMapper.findExistingToolIds(toolIds));
+        toolIds.forEach(toolId -> {
+            if (!existingToolIds.contains(toolId)) {
+                throw new PolicyResolutionException("Unknown tool_id: " + toolId);
+            }
+        });
     }
 
-    private PermissionPointItem requireActivePermissionPoint(String code) {
-        PermissionPointItem permissionPointItem = activePermissionPointsByCode.get(code);
-        if (permissionPointItem == null) {
-            throw new PolicyResolutionException("Unknown or inactive permission_point_code: " + code);
-        }
-        return permissionPointItem;
+    private PermissionPointItem toPermissionPointItem(PermissionPointRow row) {
+        return new PermissionPointItem(row.getPermissionPointCode(), row.getDisplayNameZh());
     }
 
-    private void requireActivePermissionPointCode(String code) {
-        requireActivePermissionPoint(code);
-    }
-
-    private ToolItem requireTool(String toolId) {
-        ToolItem toolItem = toolsById.get(toolId);
-        if (toolItem == null) {
-            throw new PolicyResolutionException("Unknown tool_id: " + toolId);
-        }
-        return toolItem;
+    private ToolItem toToolItem(ToolRow row) {
+        return new ToolItem(row.getToolId(), row.getDisplayNameZh());
     }
 
     private String normalizeConditionField(String field) {
         String normalizedField = normalizeValue(field, "condition.field");
-        if (!"subject.user_id".equals(normalizedField)) {
+        if (!SUPPORTED_CONDITION_FIELD.equals(normalizedField)) {
             throw new PolicyResolutionException("Unsupported condition field: " + normalizedField);
         }
         return normalizedField;
@@ -377,33 +407,41 @@ public class PolicyResolutionService {
         if (CollectionUtils.isEmpty(values)) {
             throw new PolicyResolutionException(fieldName + " must not be empty");
         }
-        List<String> sanitized = new ArrayList<>();
-        values.stream()
+        List<String> sanitized = values.stream()
                 .map(value -> value == null ? "" : value.trim())
                 .filter(value -> !value.isEmpty())
-                .sorted()
                 .distinct()
-                .forEach(sanitized::add);
+                .sorted()
+                .toList();
         if (sanitized.isEmpty()) {
             throw new PolicyResolutionException(fieldName + " must not be empty");
         }
         return sanitized;
     }
 
-    private record StoredPermissionPoint(
-            String code,
+    private record NormalizedPermissionPoint(
+            String permissionPointCode,
             String displayNameZh,
             String description,
-            List<String> boundTools,
-            String status
+            List<NormalizedBoundTool> boundTools,
+            String status,
+            String source
     ) {
     }
 
-    private record StoredAgentStrategy(
+    private record NormalizedBoundTool(
+            String toolId,
+            String displayNameZh
+    ) {
+    }
+
+    private record NormalizedAgentStrategy(
             String strategyId,
             String agentId,
             String permissionPointCode,
-            StrategyCondition conditions,
+            String conditionField,
+            String conditionOperator,
+            List<String> conditionValues,
             String effect,
             String status
     ) {
