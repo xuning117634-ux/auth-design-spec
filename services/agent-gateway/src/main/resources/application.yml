@@ -32,6 +32,10 @@ providers:
   iam:
     base-url: http://localhost:${server.port}/mock/iam
     proxy-project-id: proxy_project_001
+    authorization-header: Bearer mock-gateway-iam-authorization
+    delegator-account-name: svc_ai_business_agent
+    delegator-appid: com.huawei.business.agent
+    agent-id: agt_business_001
 
 agent-registry:
   entries:

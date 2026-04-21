@@ -3,7 +3,6 @@ package com.huawei.it.roma.liveeda.demoagent.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -190,7 +189,7 @@ class MockMcpGatewayClientTest {
                         {
                           "agency_user": {
                             "user_id": "%s",
-                            "authorizedPermissionPoints": [%s]
+                            "consented_scopes": [%s]
                           }
                         }
                         """.formatted(

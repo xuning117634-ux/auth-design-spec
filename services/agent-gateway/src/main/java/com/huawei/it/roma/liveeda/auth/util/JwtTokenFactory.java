@@ -3,6 +3,7 @@ package com.huawei.it.roma.liveeda.auth.util;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.config.IamProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.domain.IssuedToken;
@@ -20,13 +21,19 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JwtTokenFactory {
 
+    private static final String MOCK_ENTERPRISE_ID = "11111111111111111111111111111111";
+    private static final String MOCK_ACCOUNT_TYPE = "IAM_AI_SERVICE";
+    private static final String MOCK_ACCESS_DOMAIN = "middle-secret";
+
     private final AgentGatewayProperties properties;
+    private final IamProperties iamProperties;
     private final Clock clock;
     private final IdGenerator idGenerator;
 
     public IssuedToken issueMockTc(String userId, String username, List<AuthorizedPermissionPoint> authorizedPermissionPoints) {
         Instant now = clock.instant();
         Instant expiresAt = now.plus(1, ChronoUnit.HOURS);
+        String tokenId = idGenerator.next("tc");
 
         Map<String, Object> userClaim = new LinkedHashMap<>();
         userClaim.put("user_id", userId);
@@ -39,9 +46,10 @@ public class JwtTokenFactory {
                 .withIssuedAt(now)
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt)
-                .withJWTId(idGenerator.next("tc"))
+                .withJWTId(tokenId)
+                .withClaim("token_id", tokenId)
                 .withClaim("user", userClaim)
-                .withClaim("authorizedPermissionPoints", toPermissionPointClaims(authorizedPermissionPoints))
+                .withClaim("consented_scopes", toPermissionPointClaims(authorizedPermissionPoints))
                 .sign(algorithm());
         return new IssuedToken(token, expiresAt);
     }
@@ -49,22 +57,24 @@ public class JwtTokenFactory {
     public IssuedToken issueMockT1(AgentRegistryEntry agentRegistryEntry) {
         Instant now = clock.instant();
         Instant expiresAt = now.plus(1, ChronoUnit.DAYS);
-
-        Map<String, Object> agentClaim = new LinkedHashMap<>();
-        agentClaim.put("agent_id", agentRegistryEntry.agentId());
-        agentClaim.put("agent_name", agentRegistryEntry.agentName());
-        agentClaim.put("app_id", agentRegistryEntry.appId());
-        agentClaim.put("agent_type", "server");
+        String tokenId = idGenerator.next("t1");
 
         String token = JWT.create()
-                .withIssuer("mock-iam")
-                .withSubject(agentRegistryEntry.appId())
+                .withIssuer("iam")
+                .withSubject(iamProperties.getDelegatorAppid())
                 .withIssuedAt(now)
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt)
-                .withJWTId(idGenerator.next("t1"))
-                .withClaim("agent", agentClaim)
-                .withClaim("name", agentRegistryEntry.agentServiceAccount())
+                .withJWTId(tokenId)
+                .withClaim("token_id", tokenId)
+                .withClaim("name", iamProperties.getDelegatorAccountName())
+                .withClaim("account_id", "mock-account-" + iamProperties.getDelegatorAccountName())
+                .withClaim("enterprise", MOCK_ENTERPRISE_ID)
+                .withClaim("account_type", MOCK_ACCOUNT_TYPE)
+                .withClaim("project", iamProperties.getDelegatorAppid())
+                .withClaim("access_domain", MOCK_ACCESS_DOMAIN)
+                .withClaim("proxy_id", agentRegistryEntry.appId())
+                .withClaim("agent", buildAgentClaim(agentRegistryEntry))
                 .sign(algorithm());
         return new IssuedToken(token, expiresAt);
     }
@@ -72,29 +82,32 @@ public class JwtTokenFactory {
     public IssuedToken issueMockTr(AgentRegistryEntry agentRegistryEntry, UserAuthorizationResult authorizationResult) {
         Instant now = clock.instant();
         Instant expiresAt = now.plus(1, ChronoUnit.HOURS);
-
-        Map<String, Object> agentClaim = new LinkedHashMap<>();
-        agentClaim.put("agent_id", agentRegistryEntry.agentId());
-        agentClaim.put("agent_name", agentRegistryEntry.agentName());
-        agentClaim.put("app_id", agentRegistryEntry.appId());
-        agentClaim.put("agent_type", "server");
+        String tokenId = idGenerator.next("tr");
 
         Map<String, Object> agencyUserClaim = new LinkedHashMap<>();
-        agencyUserClaim.put("idp", "mock-idaas");
+        agencyUserClaim.put("idp", "idaas");
+        agencyUserClaim.put("idp_id", authorizationResult.userId());
         agencyUserClaim.put("user_id", authorizationResult.userId());
         agencyUserClaim.put("global_user_id", authorizationResult.userId());
-        agencyUserClaim.put("oauth_client_id", "agent_gateway_client");
-        agencyUserClaim.put("oauth_client_app_id", agentRegistryEntry.appId());
-        agencyUserClaim.put("authorizedPermissionPoints", toPermissionPointClaims(authorizationResult.authorizedPermissionPoints()));
+        agencyUserClaim.put("ouath_client_id", "agent_gateway_client");
+        agencyUserClaim.put("outh_client_app_id", agentRegistryEntry.appId());
+        agencyUserClaim.put("consented_scopes", toPermissionPointClaims(authorizationResult.authorizedPermissionPoints()));
 
         String token = JWT.create()
-                .withIssuer("mock-iam")
-                .withSubject(agentRegistryEntry.appId())
+                .withIssuer("iam")
+                .withSubject(iamProperties.getDelegatorAppid())
                 .withIssuedAt(now)
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt)
-                .withJWTId(idGenerator.next("tr"))
-                .withClaim("agent", agentClaim)
+                .withJWTId(tokenId)
+                .withClaim("token_id", tokenId)
+                .withClaim("name", iamProperties.getDelegatorAccountName())
+                .withClaim("account_id", "mock-account-" + iamProperties.getDelegatorAccountName())
+                .withClaim("enterprise", MOCK_ENTERPRISE_ID)
+                .withClaim("account_type", MOCK_ACCOUNT_TYPE)
+                .withClaim("project", iamProperties.getDelegatorAppid())
+                .withClaim("access_domain", MOCK_ACCESS_DOMAIN)
+                .withClaim("agent", buildAgentClaim(agentRegistryEntry))
                 .withClaim("agency_user", agencyUserClaim)
                 .sign(algorithm());
         return new IssuedToken(token, expiresAt);
@@ -102,6 +115,14 @@ public class JwtTokenFactory {
 
     private Algorithm algorithm() {
         return Algorithm.HMAC256(properties.getJwtSecret());
+    }
+
+    private Map<String, Object> buildAgentClaim(AgentRegistryEntry agentRegistryEntry) {
+        Map<String, Object> agentClaim = new LinkedHashMap<>();
+        agentClaim.put("agent_id", agentRegistryEntry.agentId());
+        agentClaim.put("agent_name", agentRegistryEntry.agentName());
+        agentClaim.put("agent_type", "server");
+        return agentClaim;
     }
 
     private List<Map<String, Object>> toPermissionPointClaims(List<AuthorizedPermissionPoint> permissionPoints) {

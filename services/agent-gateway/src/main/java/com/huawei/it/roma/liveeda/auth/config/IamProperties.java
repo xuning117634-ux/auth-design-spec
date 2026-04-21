@@ -15,4 +15,16 @@ public class IamProperties {
 
     @NotBlank
     private String proxyProjectId;
+
+    @NotBlank
+    private String authorizationHeader;
+
+    @NotBlank
+    private String delegatorAccountName;
+
+    @NotBlank
+    private String delegatorAppid;
+
+    @NotBlank
+    private String agentId;
 }

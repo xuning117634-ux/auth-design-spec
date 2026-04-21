@@ -156,10 +156,11 @@ public class MockMcpGatewayClient {
             if (userId == null || userId.isBlank()) {
                 throw new IllegalArgumentException("TR missing agency_user.user_id");
             }
+
             Set<String> permissionPointCodes = new LinkedHashSet<>();
-            JsonNode authorizedPermissionPoints = agencyUser.path("authorizedPermissionPoints");
-            if (authorizedPermissionPoints.isArray()) {
-                authorizedPermissionPoints.forEach(node -> {
+            JsonNode consentedScopes = agencyUser.path("consented_scopes");
+            if (consentedScopes.isArray()) {
+                consentedScopes.forEach(node -> {
                     String code = node.path("code").asText();
                     if (!code.isBlank()) {
                         permissionPointCodes.add(code);

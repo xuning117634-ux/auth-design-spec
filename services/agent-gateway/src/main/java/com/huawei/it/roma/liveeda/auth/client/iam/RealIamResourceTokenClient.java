@@ -41,7 +41,11 @@ public class RealIamResourceTokenClient implements IamResourceTokenClient {
         if (response == null || response.accessToken() == null || response.accessToken().isBlank()) {
             throw new GatewayException(HttpStatus.BAD_GATEWAY, "IAM resource-token returned empty access_token");
         }
-        return new IssuedToken(response.accessToken(), response.expiresAt());
+        Instant expiresAt = response.resolveExpiresAt();
+        if (expiresAt == null) {
+            throw new GatewayException(HttpStatus.BAD_GATEWAY, "IAM resource-token returned empty expires_at");
+        }
+        return new IssuedToken(response.accessToken(), expiresAt);
     }
 
     private record ResourceTokenRequest(ResourceTokenData data) {
@@ -59,8 +63,22 @@ public class RealIamResourceTokenClient implements IamResourceTokenClient {
     }
 
     private record TokenResponse(
+            String message,
+            String code,
+            String enterprise,
             @JsonProperty("access_token") String accessToken,
-            @JsonProperty("expires_at") Instant expiresAt
+            @JsonProperty("expires_at") Instant expiresAt,
+            @JsonProperty("expires_in") Long expiresIn,
+            @JsonProperty("token_id") String tokenId,
+            @JsonProperty("token_type") String tokenType,
+            @JsonProperty("refresh_token") String refreshToken,
+            @JsonProperty("expires_on") Long expiresOn
     ) {
+        private Instant resolveExpiresAt() {
+            if (expiresAt != null) {
+                return expiresAt;
+            }
+            return expiresOn == null ? null : Instant.ofEpochMilli(expiresOn);
+        }
     }
 }

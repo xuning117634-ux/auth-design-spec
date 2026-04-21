@@ -8,6 +8,7 @@ import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -25,13 +26,16 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
         RestClient restClient = restClientBuilder.baseUrl(iamProperties.getBaseUrl()).build();
         TokenResponse response = restClient.post()
                 .uri("/iam/projects/{proxyProjectId}/assume_agent_token", iamProperties.getProxyProjectId())
+                // TODO: switch this placeholder header to the IAM SDK result after the real delegation flow is wired in.
+                .header(HttpHeaders.AUTHORIZATION, iamProperties.getAuthorizationHeader())
                 .body(new AssumeAgentTokenRequest(
                         new AssumeAgentTokenData(
                                 "assume_agent_token",
                                 new AssumeAgentTokenAttributes(
-                                        agentRegistryEntry.agentServiceAccount(),
-                                        agentRegistryEntry.appId(),
-                                        agentRegistryEntry.agentId()
+                                        // TODO: load delegator account data from persisted agent registration instead of config.
+                                        iamProperties.getDelegatorAccountName(),
+                                        iamProperties.getDelegatorAppid(),
+                                        iamProperties.getAgentId()
                                 )
                         )
                 ))
@@ -40,7 +44,11 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
         if (response == null || response.accessToken() == null || response.accessToken().isBlank()) {
             throw new GatewayException(HttpStatus.BAD_GATEWAY, "IAM assume_agent_token returned empty access_token");
         }
-        return new IssuedToken(response.accessToken(), response.expiresAt());
+        Instant expiresAt = response.resolveExpiresAt();
+        if (expiresAt == null) {
+            throw new GatewayException(HttpStatus.BAD_GATEWAY, "IAM assume_agent_token returned empty expires_at");
+        }
+        return new IssuedToken(response.accessToken(), expiresAt);
     }
 
     private record AssumeAgentTokenRequest(AssumeAgentTokenData data) {
@@ -49,17 +57,17 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
     private record AssumeAgentTokenData(String type, AssumeAgentTokenAttributes attributes) {
     }
 
-    private record AssumeAgentTokenAttributes(String agentServiceAccount, String appId, String agentId) {
+    private record AssumeAgentTokenAttributes(String delegatorAccountName, String delegatorAppid, String agentId) {
         @Override
-        @JsonProperty("agent_service_account")
-        public String agentServiceAccount() {
-            return agentServiceAccount;
+        @JsonProperty("delegator_account_name")
+        public String delegatorAccountName() {
+            return delegatorAccountName;
         }
 
         @Override
-        @JsonProperty("app_id")
-        public String appId() {
-            return appId;
+        @JsonProperty("delegator_appid")
+        public String delegatorAppid() {
+            return delegatorAppid;
         }
 
         @Override
@@ -70,8 +78,21 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
     }
 
     private record TokenResponse(
+            String message,
+            String code,
+            String enterprise,
             @JsonProperty("access_token") String accessToken,
-            @JsonProperty("expires_at") Instant expiresAt
+            @JsonProperty("expires_at") Instant expiresAt,
+            @JsonProperty("expires_in") Long expiresIn,
+            @JsonProperty("token_id") String tokenId,
+            @JsonProperty("token_type") String tokenType,
+            @JsonProperty("expires_on") Long expiresOn
     ) {
+        private Instant resolveExpiresAt() {
+            if (expiresAt != null) {
+                return expiresAt;
+            }
+            return expiresOn == null ? null : Instant.ofEpochMilli(expiresOn);
+        }
     }
 }

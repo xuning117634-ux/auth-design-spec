@@ -47,10 +47,10 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
         Map<String, Object> userClaim = decodedJWT.getClaim("user").asMap();
         String userId = stringOrDefault(userClaim, "user_id", decodedJWT.getSubject());
         String username = stringOrDefault(userClaim, "username", userId);
-        List<AuthorizedPermissionPoint> permissionPoints = extractAuthorizedPermissionPoints(decodedJWT);
+        List<AuthorizedPermissionPoint> permissionPoints = extractConsentedScopes(decodedJWT);
         if (permissionPoints.isEmpty()) {
             throw new GatewayException(HttpStatus.BAD_GATEWAY,
-                    "IDaaS token response missing authorizedPermissionPoints");
+                    "IDaaS token response missing consented_scopes");
         }
         Set<String> permissionPointCodes = permissionPoints.stream()
                 .map(AuthorizedPermissionPoint::code)
@@ -65,8 +65,8 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
         );
     }
 
-    private List<AuthorizedPermissionPoint> extractAuthorizedPermissionPoints(DecodedJWT decodedJWT) {
-        List<Map<?, ?>> claims = readMapClaims(decodedJWT, "authorizedPermissionPoints");
+    private List<AuthorizedPermissionPoint> extractConsentedScopes(DecodedJWT decodedJWT) {
+        List<Map<?, ?>> claims = readMapClaims(decodedJWT, "consented_scopes");
         List<AuthorizedPermissionPoint> permissionPoints = new ArrayList<>();
         if (claims == null) {
             return permissionPoints;
