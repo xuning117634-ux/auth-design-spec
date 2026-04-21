@@ -16,7 +16,7 @@
 - `IDaaS` 仍然基于权限点 code 做登录与授权
 - `IAM` 仍然基于 `Tc + T1` 生成最终可访问资源的 `TR`
 - 业务 Agent 带 `TR` 访问 `MCP 网关`
-- `MCP 网关` 运行时先按当前待调用工具反查所需权限点，再结合 Agent 策略判断这些权限点是否对当前用户放行，最后再根据 `TR.authorizedPermissionPoints` 反查工具集合并校验当前请求工具是否在内
+- `MCP 网关` 运行时先按当前待调用工具反查所需权限点，再结合 Agent 策略判断这些权限点是否对当前用户放行，最后再根据 `TR.agency_user.consented_scopes` 反查工具集合并校验当前请求工具是否在内
 
 一句话总结：
 
@@ -74,7 +74,7 @@ flowchart LR
 - 业务 Agent 只向网关提交 `required_tools`
 - 网关通过策略中心把工具需求翻译成权限点 code
 - 业务 Agent 拿到 `TR` 后本地缓存，直接调用 `MCP 网关`
-- `MCP 网关` 运行时先把当前待调用工具反查成所需权限点，再执行 Agent 策略判断，最后再根据 `TR.authorizedPermissionPoints` 反查工具集合并校验当前请求工具是否在内
+- `MCP 网关` 运行时先把当前待调用工具反查成所需权限点，再执行 Agent 策略判断，最后再根据 `TR.agency_user.consented_scopes` 反查工具集合并校验当前请求工具是否在内
 - `MCP 网关` 最终再路由到对应 `MCP 服务`
 
 ### 3.1 适合对外讲解的简化主流程
@@ -231,7 +231,7 @@ site_session -> gw_session_token -> gw_session
 
 ```text
 key:   gw_session_id + agent_id
-value: authorizedPermissionPoints, tc, t1, tr, expires_at
+value: consented_scopes, tc, t1, tr, expires_at
 ```
 
 ### 4.6 pending_base_login（临时状态，用后即删）
@@ -314,7 +314,7 @@ sequenceDiagram
         Agent->>MCP网关: 带 TR 调 MCP
         MCP网关->>PC: resolve-by-tools(currentTool)
         MCP网关->>PC: query strategies(requiredPermissionPointCodes)
-        MCP网关->>PC: resolve-by-codes(TR.permissionPointCodes)
+        MCP网关->>PC: resolve-by-codes(TR.agency_user.consented_scopes[].code)
         MCP网关->>MCP服务: 通过策略判断和工具归属校验后路由调用
         MCP服务-->>MCP网关: 返回工具结果
         MCP网关-->>Agent: 返回数据
@@ -345,7 +345,7 @@ sequenceDiagram
         Agent->>MCP网关: 带 TR 调 MCP
         MCP网关->>PC: resolve-by-tools(currentTool)
         MCP网关->>PC: query strategies(requiredPermissionPointCodes)
-        MCP网关->>PC: resolve-by-codes(TR.permissionPointCodes)
+        MCP网关->>PC: resolve-by-codes(TR.agency_user.consented_scopes[].code)
         MCP网关->>MCP服务: 通过策略判断和工具归属校验后路由调用
         MCP服务-->>MCP网关: 返回工具结果
         MCP网关-->>Agent: 返回数据
@@ -361,4 +361,4 @@ sequenceDiagram
 - `TR` 是用户授权给 Agent 的权限点上限边界
 - MCP 网关运行时先把当前待调用工具反查成所需权限点
 - 先结合 Agent 策略判断这些权限点是否对当前用户放行
-- 再用 `TR.authorizedPermissionPoints` 反查可访问工具集合，并校验当前请求工具是否在其中
+- 再用 `TR.agency_user.consented_scopes` 反查可访问工具集合，并校验当前请求工具是否在其中

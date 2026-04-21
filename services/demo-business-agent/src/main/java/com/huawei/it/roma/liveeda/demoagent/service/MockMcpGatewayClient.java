@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient.AgentStrategyView;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient.PermissionPointView;
+import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient.ResolveByCodesResult;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -12,57 +13,94 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
-@RequiredArgsConstructor
 public class MockMcpGatewayClient {
 
     private final PolicyCenterClient policyCenterClient;
     private final MockMcpClient mockMcpClient;
     private final ObjectMapper objectMapper;
 
+    public MockMcpGatewayClient(
+            PolicyCenterClient policyCenterClient,
+            MockMcpClient mockMcpClient,
+            ObjectMapper objectMapper
+    ) {
+        this.policyCenterClient = policyCenterClient;
+        this.mockMcpClient = mockMcpClient;
+        this.objectMapper = objectMapper;
+    }
+
     public Set<String> extractAuthorizedPermissionPointCodes(String trToken) {
         return new LinkedHashSet<>(decodeTrToken(trToken).authorizedPermissionPointCodes());
     }
 
+    public Set<String> resolveCoveredTools(String trToken) {
+        DecodedTrContext trContext = decodeTrToken(trToken);
+        ResolveByCodesResult resolution = policyCenterClient.resolveByCodes(trContext.authorizedPermissionPointCodes());
+        if (resolution == null || resolution.tools() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "策略中心未返回 TR 对应的工具集合");
+        }
+        return resolution.tools().stream()
+                .map(PolicyCenterClient.ToolView::toolId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
     public String invoke(String agentId, String trToken, Set<String> requiredTools, String message) {
         DecodedTrContext trContext = decodeTrToken(trToken);
-        PolicyCenterClient.ResolveByToolsResult toolResolution = policyCenterClient.resolveByTools(agentId, requiredTools);
         Set<String> trAuthorizedCodes = new LinkedHashSet<>(trContext.authorizedPermissionPointCodes());
 
-        Map<String, String> permissionPointLabels = new LinkedHashMap<>();
-        for (PermissionPointView permissionPoint : toolResolution.permissionPoints()) {
-            permissionPointLabels.put(permissionPoint.code(), permissionPoint.displayNameZh());
-        }
+        for (String requiredTool : requiredTools.stream().sorted().toList()) {
+            PolicyCenterClient.ResolveByToolsResult toolResolution = policyCenterClient.resolveByTools(Set.of(requiredTool));
+            Map<String, String> permissionPointLabels = buildPermissionPointLabels(toolResolution.permissionPoints());
 
-        for (String requiredCode : toolResolution.requiredPermissionPointCodes()) {
-            if (!trAuthorizedCodes.contains(requiredCode)) {
-                throw forbidden("当前请求缺少所需的用户授权：" + permissionPointLabels.getOrDefault(requiredCode, requiredCode));
+            for (String requiredCode : toolResolution.requiredPermissionPointCodes()) {
+                if (!trAuthorizedCodes.contains(requiredCode)) {
+                    throw forbidden("当前请求缺少所需的用户授权：" + permissionPointLabels.getOrDefault(requiredCode, requiredCode));
+                }
+            }
+
+            Map<String, List<AgentStrategyView>> strategiesByCode = policyCenterClient
+                    .queryAgentStrategies(agentId, toolResolution.requiredPermissionPointCodes())
+                    .strategies()
+                    .stream()
+                    .collect(Collectors.groupingBy(
+                            AgentStrategyView::permissionPointCode,
+                            LinkedHashMap::new,
+                            Collectors.toList()
+                    ));
+
+            for (String requiredCode : toolResolution.requiredPermissionPointCodes()) {
+                List<AgentStrategyView> strategies = strategiesByCode.getOrDefault(requiredCode, List.of());
+                if (!isPermissionPointAllowed(strategies, trContext.userId())) {
+                    throw forbidden("当前用户无权使用该 Agent 的此项功能：" + permissionPointLabels.getOrDefault(requiredCode, requiredCode));
+                }
             }
         }
 
-        Map<String, List<AgentStrategyView>> strategiesByCode = policyCenterClient
-                .queryAgentStrategies(agentId, toolResolution.requiredPermissionPointCodes())
-                .strategies()
-                .stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        AgentStrategyView::permissionPointCode,
-                        LinkedHashMap::new,
-                        java.util.stream.Collectors.toList()
-                ));
-
-        for (String requiredCode : toolResolution.requiredPermissionPointCodes()) {
-            List<AgentStrategyView> strategies = strategiesByCode.getOrDefault(requiredCode, List.of());
-            if (!isPermissionPointAllowed(strategies, trContext.userId())) {
-                throw forbidden("当前用户无权使用该 Agent 的此项功能：" + permissionPointLabels.getOrDefault(requiredCode, requiredCode));
+        Set<String> allowedToolsFromTr = resolveCoveredTools(trToken);
+        for (String requiredTool : requiredTools) {
+            if (!allowedToolsFromTr.contains(requiredTool)) {
+                throw forbidden("当前资源令牌不允许调用工具：" + requiredTool);
             }
         }
 
         return mockMcpClient.invoke(message, requiredTools, trToken);
+    }
+
+    private Map<String, String> buildPermissionPointLabels(List<PermissionPointView> permissionPoints) {
+        Map<String, String> labels = new LinkedHashMap<>();
+        if (permissionPoints == null) {
+            return labels;
+        }
+        for (PermissionPointView permissionPoint : permissionPoints) {
+            labels.put(permissionPoint.code(), permissionPoint.displayNameZh());
+        }
+        return labels;
     }
 
     private boolean isPermissionPointAllowed(List<AgentStrategyView> strategies, String userId) {

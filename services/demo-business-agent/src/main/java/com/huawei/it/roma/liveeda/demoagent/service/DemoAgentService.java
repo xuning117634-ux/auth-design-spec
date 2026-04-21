@@ -99,7 +99,10 @@ public class DemoAgentService {
                 siteSession.siteSessionId(),
                 properties.getAgentId(),
                 gatewayTokenResponse.accessToken(),
-                mergeCoveredTools(trCacheEntry.map(TrCacheEntry::coveredTools).orElse(Set.of()), requiredTools),
+                mergeCoveredTools(
+                        trCacheEntry.map(TrCacheEntry::coveredTools).orElse(Set.of()),
+                        mockMcpGatewayClient.resolveCoveredTools(gatewayTokenResponse.accessToken())
+                ),
                 mockMcpGatewayClient.extractAuthorizedPermissionPointCodes(gatewayTokenResponse.accessToken()),
                 Instant.now(clock).plusSeconds(gatewayTokenResponse.expiresIn() == null ? 3600 : gatewayTokenResponse.expiresIn())
         );

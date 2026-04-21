@@ -6,8 +6,7 @@ import java.util.List;
 
 public record ResolveByCodesResponse(
         List<String> permissionPointCodes,
-        List<String> allowedTools,
         List<PermissionPointItem> permissionPoints,
-        List<ToolItem> toolItems
+        List<ToolItem> tools
 ) {
 }

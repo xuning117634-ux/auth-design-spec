@@ -1,28 +1,31 @@
 package com.huawei.it.roma.liveeda.auth.client;
 
-import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.config.PolicyCenterClientProperties;
+import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import java.util.List;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Component
-@RequiredArgsConstructor
 public class HttpPolicyCenterClient implements PolicyCenterClient {
 
     private final RestClient.Builder restClientBuilder;
     private final PolicyCenterClientProperties properties;
 
+    public HttpPolicyCenterClient(RestClient.Builder restClientBuilder, PolicyCenterClientProperties properties) {
+        this.restClientBuilder = restClientBuilder;
+        this.properties = properties;
+    }
+
     @Override
-    public PolicyResolutionResult resolveByTools(String agentId, Set<String> requiredTools) {
+    public PolicyResolutionResult resolveByTools(Set<String> requiredTools) {
         RestClient restClient = restClientBuilder.baseUrl(properties.getBaseUrl()).build();
         ResolveByToolsClientResponse response = restClient.post()
                 .uri("/internal/v1/permission-points/resolve-by-tools")
-                .body(new ResolveByToolsClientRequest(agentId, requiredTools.stream().sorted().toList()))
+                .body(new ResolveByToolsClientRequest(requiredTools.stream().sorted().toList()))
                 .retrieve()
                 .body(ResolveByToolsClientResponse.class);
         if (response == null || response.requiredPermissionPointCodes() == null
@@ -49,7 +52,7 @@ public class HttpPolicyCenterClient implements PolicyCenterClient {
         return response.permissionPoints();
     }
 
-    private record ResolveByToolsClientRequest(String agentId, List<String> requiredTools) {
+    private record ResolveByToolsClientRequest(List<String> requiredTools) {
     }
 
     private record ResolveByToolsClientResponse(
@@ -63,7 +66,6 @@ public class HttpPolicyCenterClient implements PolicyCenterClient {
 
     private record ResolveByCodesClientResponse(
             List<String> permissionPointCodes,
-            List<String> allowedTools,
             List<AuthorizedPermissionPoint> permissionPoints
     ) {
     }

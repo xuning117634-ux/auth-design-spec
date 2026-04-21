@@ -66,6 +66,8 @@ class DemoAgentServiceTest {
         )).thenReturn(new GatewayTokenResponse("tr_demo_001", 1800L, null, null, null));
         when(mockMcpGatewayClient.extractAuthorizedPermissionPointCodes("tr_demo_001"))
                 .thenReturn(java.util.Set.of("erp:contract:r"));
+        when(mockMcpGatewayClient.resolveCoveredTools("tr_demo_001"))
+                .thenReturn(java.util.Set.of("mcp:contract-server/get_contract"));
         when(mockMcpGatewayClient.invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString()))
                 .thenReturn("模拟的合同查询结果");
 

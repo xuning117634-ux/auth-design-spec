@@ -51,7 +51,7 @@ class AgentGatewayFlowTest {
 
     @Test
     void shouldCompleteBaseLoginAndConsentThenReuseTr() throws Exception {
-        when(policyCenterClient.resolveByTools(eq("agt_business_001"), anySet()))
+        when(policyCenterClient.resolveByTools(anySet()))
                 .thenReturn(new PolicyResolutionResult(Set.of("erp:contract:r"), List.of(CONTRACT_READ_PERMISSION)));
         when(policyCenterClient.resolveByCodes(anySet()))
                 .thenReturn(List.of(CONTRACT_READ_PERMISSION));

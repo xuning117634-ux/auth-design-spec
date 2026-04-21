@@ -49,7 +49,7 @@ public class ResourceTokenService {
         URI validatedReturnUrl = returnUrlValidator.validate(agentRegistryEntry, request.returnUrl());
 
         Set<String> requiredTools = sanitizeTools(request.requiredTools());
-        PolicyResolutionResult policyResolutionResult = policyCenterClient.resolveByTools(request.agentId(), requiredTools);
+        PolicyResolutionResult policyResolutionResult = policyCenterClient.resolveByTools(requiredTools);
         GatewayAuthContext gatewayAuthContext = gatewayAuthContextStore.find(gatewaySession.gatewaySessionId(), request.agentId())
                 .orElse(null);
         if (gatewayAuthContext != null && gatewayAuthContext.covers(policyResolutionResult.requiredPermissionPointCodes(), clock)) {

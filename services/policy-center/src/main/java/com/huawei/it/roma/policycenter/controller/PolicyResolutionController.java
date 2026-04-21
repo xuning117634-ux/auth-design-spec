@@ -8,7 +8,6 @@ import com.huawei.it.roma.policycenter.web.ResolveByCodesResponse;
 import com.huawei.it.roma.policycenter.web.ResolveByToolsRequest;
 import com.huawei.it.roma.policycenter.web.ResolveByToolsResponse;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,14 +15,17 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/internal/v1")
-@RequiredArgsConstructor
 public class PolicyResolutionController {
 
     private final PolicyResolutionService policyResolutionService;
 
+    public PolicyResolutionController(PolicyResolutionService policyResolutionService) {
+        this.policyResolutionService = policyResolutionService;
+    }
+
     @PostMapping("/permission-points/resolve-by-tools")
     public ResolveByToolsResponse resolveByTools(@Valid @RequestBody ResolveByToolsRequest request) {
-        return policyResolutionService.resolveByTools(request.agentId(), request.requiredTools());
+        return policyResolutionService.resolveByTools(request.requiredTools());
     }
 
     @PostMapping("/permission-points/resolve-by-codes")

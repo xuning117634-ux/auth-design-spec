@@ -3,24 +3,36 @@ package com.huawei.it.roma.liveeda.demoagent.client;
 import com.huawei.it.roma.liveeda.demoagent.config.DemoAgentProperties;
 import java.util.Collection;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Component
-@RequiredArgsConstructor
 public class PolicyCenterClient {
 
     private final RestClient.Builder restClientBuilder;
     private final DemoAgentProperties properties;
 
-    public ResolveByToolsResult resolveByTools(String agentId, Collection<String> requiredTools) {
+    public PolicyCenterClient(RestClient.Builder restClientBuilder, DemoAgentProperties properties) {
+        this.restClientBuilder = restClientBuilder;
+        this.properties = properties;
+    }
+
+    public ResolveByToolsResult resolveByTools(Collection<String> requiredTools) {
         RestClient restClient = restClientBuilder.baseUrl(properties.getPolicyCenterBaseUrl()).build();
         return restClient.post()
                 .uri("/internal/v1/permission-points/resolve-by-tools")
-                .body(new ResolveByToolsRequest(agentId, requiredTools.stream().sorted().toList()))
+                .body(new ResolveByToolsRequest(requiredTools.stream().sorted().toList()))
                 .retrieve()
                 .body(ResolveByToolsResult.class);
+    }
+
+    public ResolveByCodesResult resolveByCodes(Collection<String> permissionPointCodes) {
+        RestClient restClient = restClientBuilder.baseUrl(properties.getPolicyCenterBaseUrl()).build();
+        return restClient.post()
+                .uri("/internal/v1/permission-points/resolve-by-codes")
+                .body(new ResolveByCodesRequest(permissionPointCodes.stream().sorted().toList()))
+                .retrieve()
+                .body(ResolveByCodesResult.class);
     }
 
     public QueryAgentStrategiesResult queryAgentStrategies(String agentId, Collection<String> permissionPointCodes) {
@@ -32,16 +44,25 @@ public class PolicyCenterClient {
                 .body(QueryAgentStrategiesResult.class);
     }
 
-    private record ResolveByToolsRequest(String agentId, List<String> requiredTools) {
+    private record ResolveByToolsRequest(List<String> requiredTools) {
+    }
+
+    private record ResolveByCodesRequest(List<String> permissionPointCodes) {
     }
 
     private record QueryAgentStrategiesRequest(String agentId, List<String> permissionPointCodes) {
     }
 
     public record ResolveByToolsResult(
-            String agentId,
             List<String> requiredPermissionPointCodes,
             List<PermissionPointView> permissionPoints
+    ) {
+    }
+
+    public record ResolveByCodesResult(
+            List<String> permissionPointCodes,
+            List<PermissionPointView> permissionPoints,
+            List<ToolView> tools
     ) {
     }
 
@@ -54,6 +75,12 @@ public class PolicyCenterClient {
 
     public record PermissionPointView(
             String code,
+            String displayNameZh
+    ) {
+    }
+
+    public record ToolView(
+            String toolId,
             String displayNameZh
     ) {
     }

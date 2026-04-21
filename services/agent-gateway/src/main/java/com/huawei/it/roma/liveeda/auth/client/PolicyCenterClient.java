@@ -6,7 +6,7 @@ import java.util.Set;
 
 public interface PolicyCenterClient {
 
-    PolicyResolutionResult resolveByTools(String agentId, Set<String> requiredTools);
+    PolicyResolutionResult resolveByTools(Set<String> requiredTools);
 
     List<AuthorizedPermissionPoint> resolveByCodes(Set<String> permissionPointCodes);
 }
