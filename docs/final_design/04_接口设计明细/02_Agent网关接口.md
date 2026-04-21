@@ -133,6 +133,12 @@ Content-Type: application/json
 5. 得到 `requiredPermissionPointCodes`
 6. 检查当前 `gw_auth_context` 是否已有有效 `TR`
 
+补充约束：
+
+- `resolve-by-tools` 的请求体只包含 `requiredTools`
+- 该接口不带 `agentId`
+- 工具与权限点的映射关系不带 `agent` 维度
+
 ### 5.6 成功响应示例：直接返回 `TR`
 
 ```json

@@ -16,7 +16,7 @@
 - `IDaaS` 仍然基于权限点 code 做登录与授权
 - `IAM` 仍然基于 `Tc + T1` 生成最终可访问资源的 `TR`
 - 业务 Agent 带 `TR` 访问 `MCP 网关`
-- `MCP 网关` 运行时先校验当前工具依赖的权限点是否已包含在 `TR.authorizedPermissionPoints` 中，再结合 Agent 策略判断当前用户是否允许调用目标工具
+- `MCP 网关` 运行时先按当前待调用工具反查所需权限点，再结合 Agent 策略判断这些权限点是否对当前用户放行，最后再根据 `TR.authorizedPermissionPoints` 反查工具集合并校验当前请求工具是否在内
 
 一句话总结：
 
@@ -53,7 +53,7 @@ flowchart LR
     PC["策略中心<br/>权限点/策略权威源"]
     I["IDaaS"]
     IAM["IAM<br/>T1 / TR"]
-    R["MCP 网关<br/>TR 校验 + 策略判断 + 路由"]
+    R["MCP 网关<br/>策略判断 + 工具归属校验 + 路由"]
     S["MCP 服务<br/>具体工具实现"]
 
     U <--> A
@@ -74,7 +74,7 @@ flowchart LR
 - 业务 Agent 只向网关提交 `required_tools`
 - 网关通过策略中心把工具需求翻译成权限点 code
 - 业务 Agent 拿到 `TR` 后本地缓存，直接调用 `MCP 网关`
-- `MCP 网关` 运行时先基于 `TR.authorizedPermissionPoints` 做权限点范围校验，再查询策略中心执行 Agent 策略判断
+- `MCP 网关` 运行时先把当前待调用工具反查成所需权限点，再执行 Agent 策略判断，最后再根据 `TR.authorizedPermissionPoints` 反查工具集合并校验当前请求工具是否在内
 - `MCP 网关` 最终再路由到对应 `MCP 服务`
 
 ### 3.1 适合对外讲解的简化主流程
@@ -312,8 +312,10 @@ sequenceDiagram
 
     alt 本地有有效 TR 且覆盖这组工具
         Agent->>MCP网关: 带 TR 调 MCP
-        MCP网关->>PC: resolve-by-codes + query strategies
-        MCP网关->>MCP服务: 通过 TR 校验和策略判断后路由调用
+        MCP网关->>PC: resolve-by-tools(currentTool)
+        MCP网关->>PC: query strategies(requiredPermissionPointCodes)
+        MCP网关->>PC: resolve-by-codes(TR.permissionPointCodes)
+        MCP网关->>MCP服务: 通过策略判断和工具归属校验后路由调用
         MCP服务-->>MCP网关: 返回工具结果
         MCP网关-->>Agent: 返回数据
         Agent-->>用户: 返回答案
@@ -341,8 +343,10 @@ sequenceDiagram
         end
 
         Agent->>MCP网关: 带 TR 调 MCP
-        MCP网关->>PC: resolve-by-codes + query strategies
-        MCP网关->>MCP服务: 通过 TR 校验和策略判断后路由调用
+        MCP网关->>PC: resolve-by-tools(currentTool)
+        MCP网关->>PC: query strategies(requiredPermissionPointCodes)
+        MCP网关->>PC: resolve-by-codes(TR.permissionPointCodes)
+        MCP网关->>MCP服务: 通过策略判断和工具归属校验后路由调用
         MCP服务-->>MCP网关: 返回工具结果
         MCP网关-->>Agent: 返回数据
         Agent-->>用户: 返回答案
@@ -355,5 +359,6 @@ sequenceDiagram
 - Agent 网关负责 `required_tools -> requiredPermissionPointCodes`
 - `Tc` 和 `TR` 都携带权限点对象数组
 - `TR` 是用户授权给 Agent 的权限点上限边界
-- MCP 网关必须先校验当前工具所需权限点是否在 `TR.authorizedPermissionPoints` 中
-- 之后再结合 Agent 策略判断当前用户是否允许使用这些功能
+- MCP 网关运行时先把当前待调用工具反查成所需权限点
+- 先结合 Agent 策略判断这些权限点是否对当前用户放行
+- 再用 `TR.authorizedPermissionPoints` 反查可访问工具集合，并校验当前请求工具是否在其中

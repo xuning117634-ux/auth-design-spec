@@ -5,11 +5,12 @@
 MCP 网关负责：
 
 1. 接收业务 Agent 带来的 `TR`
-2. 判断当前工具依赖哪些权限点
-3. 校验这些权限点是否已包含在 `TR.authorizedPermissionPoints` 中
-4. 查询 Agent 策略
-5. 结合 `TR` 范围和 Agent 策略，判断当前请求是否允许
-6. 路由到具体 `MCP 服务`
+2. 按当前待调用工具反查所需权限点
+3. 校验这些权限点是否已经在 `TR` 中
+4. 查询这些权限点对应的 Agent 策略
+5. 再按 `TR` 中权限点反查工具集合
+6. 校验当前请求工具是否包含在该工具集合中
+7. 路由到具体 `MCP 服务`
 
 ## 2. 对外接口清单
 
@@ -46,14 +47,18 @@ Content-Type: application/json
    - `agent_id`
    - `agency_user.user_id`
    - `authorizedPermissionPoints`
-3. 根据 `tool_id` 反查当前工具依赖哪些权限点
-4. 校验这些权限点是否全部在 `TR.authorizedPermissionPoints[].code` 中
-5. 查询当前 `agent_id + permissionPointCodes` 的 Agent 策略
-6. 执行判定：
+3. 调策略中心 `resolve-by-tools`
+4. 得到当前 `tool_id` 所需的 `permissionPointCodes`
+5. 校验这些权限点是否都已经包含在 `TR.authorizedPermissionPoints[].code` 中
+6. 查询当前 `agent_id + permissionPointCodes` 的 Agent 策略
+7. 执行判定：
    - `DENY` 优先
    - 无策略默认允许
    - 有 `PERMIT` 时必须命中至少一条
-7. 判定通过后，路由到具体 `MCP 服务`
+8. 再以 `TR.authorizedPermissionPoints[].code` 调策略中心 `resolve-by-codes`
+9. 拿到 `TR` 对应的工具集合
+10. 校验当前 `tool_id` 是否包含在该工具集合中
+11. 判定通过后，路由到具体 `MCP 服务`
 
 ### 3.4 成功响应示例
 
@@ -91,17 +96,15 @@ Content-Type: application/json
 MCP 网关运行时至少会调用以下接口：
 
 - `POST /internal/v1/permission-points/resolve-by-tools`
-  - 用于确定当前工具依赖哪些权限点
+  - 用于把当前待调用工具反查成所需权限点
 - `POST /internal/v1/agent-strategies/query`
-  - 用于获取当前 Agent 对这些权限点的策略
-
-必要时也可以调用：
-
+  - 用于获取当前 Agent 对当前工具所需权限点的策略
 - `POST /internal/v1/permission-points/resolve-by-codes`
-  - 用于工具发现、调试或缓存预热
+  - 用于把 `TR` 中权限点反查成工具集合
 
 ## 5. 当前版本结论
 
-- 即使策略放行，也必须先通过 `TR` 范围校验
-- 当前请求只对本次实际调用工具依赖的权限点做判断
-- 只要本次调用工具依赖的权限点被拒绝，当前请求直接失败
+- MCP 网关运行时先按当前待调用工具反查所需权限点
+- 再对这些权限点做 Agent 策略判断
+- 然后再按 `TR` 中权限点反查工具集合
+- 只要当前请求工具不在该工具集合内，当前请求直接失败
