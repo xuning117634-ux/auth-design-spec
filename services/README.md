@@ -1,4 +1,5 @@
 # Services Minimal Startup Guide
+[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('pc:v1:你的真实密码:policy-center'))
 
 这份说明只覆盖 `services` 目录下的 3 个应用：
 
