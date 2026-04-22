@@ -4,7 +4,7 @@ spring:
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/policy_center?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: root
+    password-base64: cGM6djE6cm9vdDpwb2xpY3ktY2VudGVy
     driver-class-name: com.mysql.cj.jdbc.Driver
 
 server:
