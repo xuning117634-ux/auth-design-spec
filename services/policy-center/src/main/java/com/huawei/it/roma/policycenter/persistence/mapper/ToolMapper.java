@@ -49,6 +49,18 @@ public interface ToolMapper {
 
     @Select({
             "<script>",
+            "SELECT tool_id, display_name_zh",
+            "FROM pc_tool",
+            "WHERE tool_id IN",
+            "<foreach collection='toolIds' item='toolId' open='(' separator=',' close=')'>",
+            "#{toolId}",
+            "</foreach>",
+            "</script>"
+    })
+    List<ToolRow> findByToolIds(@Param("toolIds") List<String> toolIds);
+
+    @Select({
+            "<script>",
             "SELECT DISTINCT t.tool_id, t.display_name_zh",
             "FROM pc_tool t",
             "JOIN pc_permission_point_tool_rel rel ON rel.tool_id = t.tool_id",

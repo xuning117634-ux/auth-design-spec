@@ -24,7 +24,6 @@ import com.huawei.it.roma.policycenter.web.ResolveByToolsResponse;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -110,20 +109,11 @@ public class PolicyResolutionService {
 
     public ResolveByToolsResponse resolveByTools(List<String> requiredTools) {
         List<String> stableTools = sanitizeAndSort(requiredTools, "required_tools");
-        ensureToolsExist(stableTools);
 
         List<PermissionPointToolRelRow> relationRows = permissionPointToolRelMapper.findActiveByToolIds(stableTools);
-        Map<String, List<PermissionPointToolRelRow>> relationsByToolId = relationRows.stream()
-                .collect(Collectors.groupingBy(
-                        PermissionPointToolRelRow::getToolId,
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
-        stableTools.forEach(toolId -> {
-            if (!relationsByToolId.containsKey(toolId)) {
-                throw new PolicyResolutionException("No active permission point mapping found for tool_id: " + toolId);
-            }
-        });
+        if (relationRows.isEmpty()) {
+            return new ResolveByToolsResponse(List.of(), List.of());
+        }
 
         List<String> permissionPointCodes = relationRows.stream()
                 .map(PermissionPointToolRelRow::getPermissionPointCode)
@@ -133,63 +123,61 @@ public class PolicyResolutionService {
         List<PermissionPointRow> permissionPointRows = permissionPointMapper.findActiveByCodes(permissionPointCodes);
         Map<String, PermissionPointRow> permissionPointsByCode = permissionPointRows.stream()
                 .collect(Collectors.toMap(PermissionPointRow::getPermissionPointCode, row -> row));
-        permissionPointCodes.forEach(code -> {
-            if (!permissionPointsByCode.containsKey(code)) {
-                throw new PolicyResolutionException("Unknown or inactive permission_point_code: " + code);
-            }
-        });
 
         List<PermissionPointItem> permissionPoints = permissionPointCodes.stream()
                 .map(permissionPointsByCode::get)
+                .filter(row -> row != null)
                 .map(this::toPermissionPointItem)
                 .toList();
-        return new ResolveByToolsResponse(permissionPointCodes, permissionPoints);
+        List<String> matchedPermissionPointCodes = permissionPoints.stream()
+                .map(PermissionPointItem::code)
+                .toList();
+        return new ResolveByToolsResponse(matchedPermissionPointCodes, permissionPoints);
     }
 
     public ResolveByCodesResponse resolveByCodes(List<String> permissionPointCodes) {
         List<String> stableCodes = sanitizeAndSort(permissionPointCodes, "permission_point_codes");
-        Map<String, PermissionPointRow> permissionPointsByCode = loadActivePermissionPoints(stableCodes);
+        List<PermissionPointRow> permissionPointRows = permissionPointMapper.findActiveByCodes(stableCodes);
+        if (permissionPointRows.isEmpty()) {
+            return new ResolveByCodesResponse(List.of(), List.of(), List.of());
+        }
 
-        List<PermissionPointToolRelRow> relationRows = permissionPointToolRelMapper.findActiveByPermissionPointCodes(stableCodes);
-        Map<String, List<PermissionPointToolRelRow>> relationsByPermissionPointCode = relationRows.stream()
-                .collect(Collectors.groupingBy(
-                        PermissionPointToolRelRow::getPermissionPointCode,
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
-        stableCodes.forEach(code -> {
-            if (!relationsByPermissionPointCode.containsKey(code)) {
-                throw new PolicyResolutionException("No active tool mapping found for permission_point_code: " + code);
-            }
-        });
-
-        List<ToolRow> toolRows = toolMapper.findActiveToolsByPermissionPointCodes(stableCodes);
+        List<String> activeCodes = permissionPointRows.stream()
+                .map(PermissionPointRow::getPermissionPointCode)
+                .distinct()
+                .sorted()
+                .toList();
+        List<ToolRow> toolRows = toolMapper.findActiveToolsByPermissionPointCodes(activeCodes);
         List<ToolItem> tools = toolRows.stream()
                 .sorted(Comparator.comparing(ToolRow::getToolId))
                 .map(this::toToolItem)
                 .toList();
-        if (tools.isEmpty()) {
-            throw new PolicyResolutionException("No active tool mapping found for permission_point_codes: " + stableCodes);
-        }
 
-        List<PermissionPointItem> permissionPoints = stableCodes.stream()
-                .map(permissionPointsByCode::get)
+        List<PermissionPointItem> permissionPoints = permissionPointRows.stream()
+                .sorted(Comparator.comparing(PermissionPointRow::getPermissionPointCode))
                 .map(this::toPermissionPointItem)
                 .toList();
-        return new ResolveByCodesResponse(stableCodes, permissionPoints, tools);
+        return new ResolveByCodesResponse(activeCodes, permissionPoints, tools);
     }
 
     public QueryAgentStrategiesResponse queryAgentStrategies(String agentId, List<String> permissionPointCodes) {
         String normalizedAgentId = normalizeValue(agentId, "agent_id");
         List<String> stableCodes = sanitizeAndSort(permissionPointCodes, "permission_point_codes");
-        loadActivePermissionPoints(stableCodes);
+        List<String> activeCodes = permissionPointMapper.findActiveByCodes(stableCodes).stream()
+                .map(PermissionPointRow::getPermissionPointCode)
+                .distinct()
+                .sorted()
+                .toList();
+        if (activeCodes.isEmpty()) {
+            return new QueryAgentStrategiesResponse(normalizedAgentId, List.of(), List.of());
+        }
 
         List<AgentStrategyRow> strategyRows = agentStrategyMapper.findActiveByAgentIdAndPermissionPointCodes(
                 normalizedAgentId,
-                stableCodes
+                activeCodes
         );
         if (strategyRows.isEmpty()) {
-            return new QueryAgentStrategiesResponse(normalizedAgentId, stableCodes, List.of());
+            return new QueryAgentStrategiesResponse(normalizedAgentId, activeCodes, List.of());
         }
 
         List<String> strategyIds = strategyRows.stream()
@@ -220,7 +208,7 @@ public class PolicyResolutionService {
                         row.getStatus()
                 ))
                 .toList();
-        return new QueryAgentStrategiesResponse(normalizedAgentId, stableCodes, strategies);
+        return new QueryAgentStrategiesResponse(normalizedAgentId, activeCodes, strategies);
     }
 
     private void upsertPermissionPoint(NormalizedPermissionPoint permissionPoint) {
@@ -294,11 +282,25 @@ public class PolicyResolutionService {
         if (CollectionUtils.isEmpty(boundTools)) {
             throw new PolicyResolutionException("bound_tools must not be empty");
         }
+        List<NormalizedBoundTool> requestedTools = boundTools.stream()
+                .map(tool -> new NormalizedBoundTool(
+                        normalizeValue(tool.toolId(), "bound_tools.tool_id"),
+                        normalizeOptionalValue(tool.displayNameZh())
+                ))
+                .toList();
+        Map<String, String> existingDisplayNamesByToolId = toolMapper.findByToolIds(requestedTools.stream()
+                        .map(NormalizedBoundTool::toolId)
+                        .distinct()
+                        .sorted()
+                        .toList()).stream()
+                .collect(Collectors.toMap(ToolRow::getToolId, ToolRow::getDisplayNameZh));
         Map<String, NormalizedBoundTool> toolsById = new TreeMap<>();
-        boundTools.forEach(tool -> {
-            String toolId = normalizeValue(tool.toolId(), "bound_tools.tool_id");
-            String displayNameZh = normalizeValue(tool.displayNameZh(), "bound_tools.display_name_zh");
-            toolsById.put(toolId, new NormalizedBoundTool(toolId, displayNameZh));
+        requestedTools.forEach(tool -> {
+            String displayNameZh = tool.displayNameZh();
+            if (displayNameZh == null || displayNameZh.isBlank()) {
+                displayNameZh = existingDisplayNamesByToolId.getOrDefault(tool.toolId(), tool.toolId());
+            }
+            toolsById.put(tool.toolId(), new NormalizedBoundTool(tool.toolId(), displayNameZh));
         });
         if (toolsById.isEmpty()) {
             throw new PolicyResolutionException("bound_tools must not be empty");
@@ -322,18 +324,6 @@ public class PolicyResolutionService {
         );
     }
 
-    private Map<String, PermissionPointRow> loadActivePermissionPoints(List<String> permissionPointCodes) {
-        List<PermissionPointRow> rows = permissionPointMapper.findActiveByCodes(permissionPointCodes);
-        Map<String, PermissionPointRow> rowsByCode = rows.stream()
-                .collect(Collectors.toMap(PermissionPointRow::getPermissionPointCode, row -> row));
-        permissionPointCodes.forEach(code -> {
-            if (!rowsByCode.containsKey(code)) {
-                throw new PolicyResolutionException("Unknown or inactive permission_point_code: " + code);
-            }
-        });
-        return rowsByCode;
-    }
-
     private void ensurePermissionPointsExist(List<String> permissionPointCodes) {
         List<PermissionPointRow> rows = permissionPointMapper.findByCodes(permissionPointCodes);
         Set<String> existingCodes = rows.stream()
@@ -342,15 +332,6 @@ public class PolicyResolutionService {
         permissionPointCodes.forEach(code -> {
             if (!existingCodes.contains(code)) {
                 throw new PolicyResolutionException("Unknown permission_point_code: " + code);
-            }
-        });
-    }
-
-    private void ensureToolsExist(List<String> toolIds) {
-        Set<String> existingToolIds = new LinkedHashSet<>(toolMapper.findExistingToolIds(toolIds));
-        toolIds.forEach(toolId -> {
-            if (!existingToolIds.contains(toolId)) {
-                throw new PolicyResolutionException("Unknown tool_id: " + toolId);
             }
         });
     }
@@ -401,6 +382,14 @@ public class PolicyResolutionService {
             throw new PolicyResolutionException(fieldName + " must not be blank");
         }
         return normalizedValue;
+    }
+
+    private String normalizeOptionalValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalizedValue = value.trim();
+        return normalizedValue.isEmpty() ? null : normalizedValue;
     }
 
     private List<String> sanitizeAndSort(List<String> values, String fieldName) {

@@ -38,6 +38,42 @@ class PolicyResolutionControllerTest {
     }
 
     @Test
+    void shouldAcceptStringStyleBoundToolsInBatchUpsert() throws Exception {
+        mockMvc.perform(put("/internal/v1/permission-points/batch-upsert")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "source": "mcp_gateway",
+                                  "items": [
+                                    {
+                                      "permissionPointCode": "erp:contract:r",
+                                      "displayNameZh": "ERP 合同的可读权限",
+                                      "description": "允许读取 ERP 合同数据",
+                                      "boundTools": [
+                                        "mcp:contract-server/get_contract"
+                                      ],
+                                      "status": "ACTIVE"
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.upsertedCount").value(1));
+
+        mockMvc.perform(post("/internal/v1/permission-points/resolve-by-codes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "permissionPointCodes": [
+                                    "erp:contract:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tools[0].toolId").value("mcp:contract-server/get_contract"));
+    }
+
+    @Test
     void shouldResolveCodesToPermissionPointsAndTools() throws Exception {
         mockMvc.perform(post("/internal/v1/permission-points/resolve-by-codes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -129,8 +165,9 @@ class PolicyResolutionControllerTest {
                                   ]
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiredPermissionPointCodes.length()").value(0))
+                .andExpect(jsonPath("$.permissionPoints.length()").value(0));
 
         mockMvc.perform(post("/internal/v1/permission-points/resolve-by-codes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -141,8 +178,10 @@ class PolicyResolutionControllerTest {
                                   ]
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissionPointCodes.length()").value(0))
+                .andExpect(jsonPath("$.permissionPoints.length()").value(0))
+                .andExpect(jsonPath("$.tools.length()").value(0));
     }
 
     @Test
@@ -218,7 +257,42 @@ class PolicyResolutionControllerTest {
                                   ]
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiredPermissionPointCodes.length()").value(0))
+                .andExpect(jsonPath("$.permissionPoints.length()").value(0));
+    }
+
+    @Test
+    void shouldReturnEmptyWhenQueryStrategiesForUnknownPermissionPoint() throws Exception {
+        mockMvc.perform(post("/internal/v1/agent-strategies/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agentId": "agt_business_001",
+                                  "permissionPointCodes": [
+                                    "erp:unknown:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissionPointCodes.length()").value(0))
+                .andExpect(jsonPath("$.strategies.length()").value(0));
+    }
+
+    @Test
+    void shouldReturnEmptyWhenResolveByCodesForUnknownPermissionPoint() throws Exception {
+        mockMvc.perform(post("/internal/v1/permission-points/resolve-by-codes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "permissionPointCodes": [
+                                    "erp:unknown:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissionPointCodes.length()").value(0))
+                .andExpect(jsonPath("$.permissionPoints.length()").value(0))
+                .andExpect(jsonPath("$.tools.length()").value(0));
     }
 }
