@@ -12,6 +12,6 @@ public record ResourceTokenResponse(
     }
 
     public static ResourceTokenResponse redirect(String redirectUrl, String requestId) {
-        return new ResourceTokenResponse(null, null, "redirect", redirectUrl, requestId);
+        return new ResourceTokenResponse(null, null, "REDIRECT_REQUIRED", redirectUrl, requestId);
     }
 }

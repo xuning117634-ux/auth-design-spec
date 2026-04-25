@@ -16,6 +16,17 @@ Agent 网关不负责：
 - 判断业务 Agent 本地是否已有可复用 `TR`。
 - 在浏览器 URL 中返回 `Tc`、`TR` 或用户信息。
 
+## 1.1 IDaaS 委托信任前置条件
+
+注册 Agent 后，外部系统已经调用 IDaaS 委托授权接口，建立 `Agent 网关 client_id` 与 `业务 Agent agent_id` 的信任关系。运行时 Agent 网关直接基于这条信任代理业务 Agent 发起 IDaaS OAuth 流程。
+
+运行时涉及两类 IDaaS 身份字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `client_id` | Agent 网关在 IDaaS 的 OAuth 客户端 ID，例如 `gw_client_001` |
+| `agent_id` | 当前业务 Agent 标识，全系统共用同一个值，例如 `agt_business_001` |
+
 ## 2. 接口分类
 
 | 分类 | 接口 |
@@ -53,13 +64,13 @@ GET /gw/auth/login?agent_id=agt_business_001&return_url=https%3A%2F%2Fbusiness-a
 1. 校验 `agent_id`。
 2. 校验 `return_url` 是否满足 `allowed_return_hosts`。
 3. 创建 `pending_base_login`。
-4. 302 跳转到 IDaaS `/authorize?scope=base`。
+4. 302 跳转到 IDaaS `/authorize?scope=base`，并携带 `client_id + agent_id`。
 
 ### 3.5 响应示例
 
 ```http
 HTTP/1.1 302 Found
-Location: https://idaas.huawei.com/oauth2/authorize?response_type=code&client_id=gw_client_001&redirect_uri=https%3A%2F%2Fagent-gateway.huawei.com%2Fgw%2Fauth%2Fbase%2Fcallback&scope=base&state=gwst_login_001
+Location: https://idaas.huawei.com/oauth2/authorize?response_type=code&client_id=gw_client_001&agent_id=agt_business_001&redirect_uri=https%3A%2F%2Fagent-gateway.huawei.com%2Fgw%2Fauth%2Fbase%2Fcallback&scope=base&state=gwst_login_001
 ```
 
 ## 4. `GET /gw/auth/base/callback`
@@ -77,11 +88,10 @@ GET /gw/auth/base/callback?code=code_base_001&state=gwst_login_001
 ### 4.3 处理规则
 
 1. 通过 `state` 找到 `pending_base_login`。
-2. 用 `code` 调 IDaaS `/oauth2/token`。
-3. 从 IDaaS 返回结果中取得可信用户信息。
-4. 创建一次性 `ticketST`。
-5. 删除或标记完成 `pending_base_login`。
-6. 302 回业务 Agent 的 `return_url`。
+2. 不立即用 `code` 换用户信息。
+3. 创建一次性 `ticketST`，并把 `code`、`client_id`、`redirect_uri`、`agent_id`、`return_url` 绑定到该票据。
+4. 删除或标记完成 `pending_base_login`。
+5. 302 回业务 Agent 的 `return_url`。
 
 ### 4.4 响应示例
 
@@ -95,6 +105,7 @@ Location: https://business-agent.huawei.com/agent?ticketST=st_login_001&state=st
 - `ticketST` 只是一张一次性取件票据。
 - `ticketST` 不等同于用户登录态，也不等同于资源访问令牌。
 - 用户信息不放入浏览器 URL。
+- base callback 阶段不调用 IDaaS `/oauth2/token`；真正换 `Tc` 和取用户信息发生在 `/gw/auth/ticket/exchange`。
 
 ## 5. `POST /gw/auth/ticket/exchange`
 
@@ -127,8 +138,10 @@ Content-Type: application/json
 
 1. 校验 `ticketST` 存在、未过期、未使用。
 2. 校验 `ticketST` 绑定的 `agent_id` 与请求一致。
-3. 将 `ticketST` 标记为已使用。
-4. 返回用户信息。
+3. 使用 `ticketST` 绑定的 `code`，结合 Agent 网关的 `client_id + client_secret`，调用 IDaaS `/oauth2/token`，换取 `Tc` 对应的短令牌 `access_token`。
+4. 使用 `Tc access_token` 调 IDaaS 用户信息接口。
+5. 将 `ticketST` 标记为已使用。
+6. 返回用户信息。
 
 ### 5.5 成功响应示例
 
@@ -243,7 +256,7 @@ GET /gw/auth/authorize?request_id=req_001
 2. 找到本次需要申请的 `requiredPermissionPointCodes`。
 3. 将 `subject_hint` 作为 `login_hint` 或等价参数传给 IDaaS。
 4. 创建内部 `gw_state -> request_id` 映射。
-5. 302 跳转到 IDaaS `/authorize`。
+5. 302 跳转到 IDaaS `/authorize`，并携带 `client_id + agent_id`。
 6. 浏览器实际访问 IDaaS 授权地址。
 7. 首次非 base 授权通常由 IDaaS 展示授权页，用户确认后再 302 回网关 callback。
 
@@ -251,7 +264,7 @@ GET /gw/auth/authorize?request_id=req_001
 
 ```http
 HTTP/1.1 302 Found
-Location: https://idaas.huawei.com/oauth2/authorize?response_type=code&client_id=gw_client_001&redirect_uri=https%3A%2F%2Fagent-gateway.huawei.com%2Fgw%2Fauth%2Fconsent%2Fcallback&scope=erp%3Acontract%3Ar&state=gwst_auth_001&login_hint=z01062668
+Location: https://idaas.huawei.com/oauth2/authorize?response_type=code&client_id=gw_client_001&agent_id=agt_business_001&redirect_uri=https%3A%2F%2Fagent-gateway.huawei.com%2Fgw%2Fauth%2Fconsent%2Fcallback&scope=erp%3Acontract%3Ar&state=gwst_auth_001&login_hint=z01062668
 ```
 
 ## 8. `GET /gw/auth/consent/callback`

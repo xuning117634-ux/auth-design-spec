@@ -3,13 +3,12 @@ package com.huawei.it.roma.liveeda.auth.controller;
 import com.huawei.it.roma.liveeda.auth.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
-import com.huawei.it.roma.liveeda.auth.domain.GatewaySession;
-import com.huawei.it.roma.liveeda.auth.service.GatewayAuthService;
-import com.huawei.it.roma.liveeda.auth.store.GatewaySessionStore;
 import com.huawei.it.roma.liveeda.auth.store.MockIdaasGrantStore;
 import com.huawei.it.roma.liveeda.auth.util.IdGenerator;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -18,6 +17,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,8 +33,9 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequiredArgsConstructor
 public class MockIdaasController {
 
+    private static final String MOCK_IDAAS_SESSION_COOKIE = "mock_idaas_session";
+
     private final MockIdaasGrantStore mockIdaasGrantStore;
-    private final GatewaySessionStore gatewaySessionStore;
     private final PolicyCenterClient policyCenterClient;
     private final AgentGatewayProperties properties;
     private final IdGenerator idGenerator;
@@ -45,13 +46,12 @@ public class MockIdaasController {
             @RequestParam("redirect_uri") String redirectUri,
             @RequestParam("scope") String scope,
             @RequestParam("state") String state,
-            @CookieValue(name = GatewayAuthService.GATEWAY_SESSION_COOKIE, required = false) String gatewaySessionId
+            @CookieValue(name = MOCK_IDAAS_SESSION_COOKIE, required = false) String mockIdaasSession
     ) {
         if ("base".equals(flow)) {
             return renderBaseLoginPage(redirectUri, scope, state);
         }
-        GatewaySession gatewaySession = gatewaySessionId == null ? null : gatewaySessionStore.findById(gatewaySessionId).orElse(null);
-        return renderConsentPage(redirectUri, scope, state, gatewaySession);
+        return renderConsentPage(redirectUri, scope, state, mockIdaasSession);
     }
 
     @PostMapping("/approve")
@@ -64,11 +64,11 @@ public class MockIdaasController {
             @RequestParam(name = "username", required = false) String username,
             @RequestParam(name = "password", required = false) String password,
             @RequestParam(name = "approved", required = false) String approved,
-            @CookieValue(name = GatewayAuthService.GATEWAY_SESSION_COOKIE, required = false) String gatewaySessionId
+            @CookieValue(name = MOCK_IDAAS_SESSION_COOKIE, required = false) String mockIdaasSession
     ) {
-        GatewaySession gatewaySession = gatewaySessionId == null ? null : gatewaySessionStore.findById(gatewaySessionId).orElse(null);
-        String defaultUserId = gatewaySession == null ? properties.getDefaultUserId() : gatewaySession.userId();
-        String defaultUsername = gatewaySession == null ? properties.getDefaultUsername() : gatewaySession.username();
+        MockUser mockUser = parseMockUser(mockIdaasSession);
+        String defaultUserId = mockUser == null ? properties.getDefaultUserId() : mockUser.userId();
+        String defaultUsername = mockUser == null ? properties.getDefaultUsername() : mockUser.username();
 
         String resolvedUserId = trimToDefault(userId, defaultUserId);
         String resolvedUsername = trimToDefault(username, defaultUsername);
@@ -99,9 +99,21 @@ public class MockIdaasController {
                 .queryParam("state", state)
                 .build(true)
                 .toUri();
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .header(HttpHeaders.LOCATION, callbackUri.toString())
-                .build();
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.FOUND)
+                .header(HttpHeaders.LOCATION, callbackUri.toString());
+        if ("base".equals(flow)) {
+            response.header(HttpHeaders.SET_COOKIE, ResponseCookie.from(
+                            MOCK_IDAAS_SESSION_COOKIE,
+                            encodeMockUser(resolvedUserId, resolvedUsername)
+                    )
+                    .httpOnly(true)
+                    .secure(properties.isSecureCookies())
+                    .sameSite("Lax")
+                    .path("/mock/idaas")
+                    .build()
+                    .toString());
+        }
+        return response.build();
     }
 
     private String renderBaseLoginPage(String redirectUri, String scope, String state) {
@@ -168,7 +180,7 @@ public class MockIdaasController {
         );
     }
 
-    private String renderConsentPage(String redirectUri, String scope, String state, GatewaySession gatewaySession) {
+    private String renderConsentPage(String redirectUri, String scope, String state, String mockIdaasSession) {
         Set<String> permissionPointCodes = Arrays.stream(scope.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isEmpty())
@@ -180,8 +192,9 @@ public class MockIdaasController {
                         """.formatted(escapeHtml(point.code()), escapeHtml(point.displayNameZh())))
                 .collect(Collectors.joining());
 
-        String userId = gatewaySession == null ? properties.getDefaultUserId() : gatewaySession.userId();
-        String username = gatewaySession == null ? properties.getDefaultUsername() : gatewaySession.username();
+        MockUser mockUser = parseMockUser(mockIdaasSession);
+        String userId = mockUser == null ? properties.getDefaultUserId() : mockUser.userId();
+        String username = mockUser == null ? properties.getDefaultUsername() : mockUser.username();
 
         return """
                 <!DOCTYPE html>
@@ -262,5 +275,30 @@ public class MockIdaasController {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&#39;");
+    }
+
+    private String encodeMockUser(String userId, String username) {
+        return Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString((userId + "\n" + username).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private MockUser parseMockUser(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            String decoded = new String(Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8);
+            String[] parts = decoded.split("\n", 2);
+            if (parts.length != 2 || parts[0].isBlank()) {
+                return null;
+            }
+            return new MockUser(parts[0], parts[1].isBlank() ? parts[0] : parts[1]);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    private record MockUser(String userId, String username) {
     }
 }

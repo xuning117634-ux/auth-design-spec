@@ -9,8 +9,10 @@
 `ticketST` 用于 base 登录结果交付：
 
 ```text
-ticketST -> agent_id, user_info, used, expires_at
+ticketST -> agent_id, authorization_code, client_id, redirect_uri, used, expires_at
 ```
+
+`ticketST` 实际绑定的是 base callback 带回的 `authorization code`，用户信息在交换接口里再获取。
 
 安全要求：
 
@@ -20,6 +22,9 @@ ticketST -> agent_id, user_info, used, expires_at
 - 必须绑定原始 `return_url` 所属白名单。
 - 交换成功后立即标记为 used。
 - 不允许返回 `Tc` 或 `TR`。
+- `/gw/auth/base/callback` 不立即用 `code` 换用户信息。
+- `/gw/auth/ticket/exchange` 才执行 `code + client_id + client_secret + 可选 redirect_uri -> Tc access_token -> IDaaS 用户信息`。
+- 获取用户信息接口只传 `access_token`。
 
 ## 3. token_result_ticket
 

@@ -1,11 +1,10 @@
 package com.huawei.it.roma.liveeda.auth;
 
 import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -14,7 +13,6 @@ import com.huawei.it.roma.liveeda.auth.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.auth.client.PolicyResolutionResult;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.web.ResourceTokenRequest;
-import jakarta.servlet.http.Cookie;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +48,7 @@ class AgentGatewayFlowTest {
     private PolicyCenterClient policyCenterClient;
 
     @Test
-    void shouldCompleteBaseLoginAndConsentThenReuseTr() throws Exception {
+    void shouldCompleteBaseLoginAndConsentWithOneTimeTickets() throws Exception {
         when(policyCenterClient.resolveByTools(anySet()))
                 .thenReturn(new PolicyResolutionResult(Set.of("erp:contract:r"), List.of(CONTRACT_READ_PERMISSION)));
         when(policyCenterClient.resolveByCodes(anySet()))
@@ -65,6 +63,8 @@ class AgentGatewayFlowTest {
 
         URI mockIdaasBaseUri = URI.create(startLoginResult.getResponse().getRedirectedUrl());
         Map<String, String> baseParams = queryParams(mockIdaasBaseUri);
+        org.junit.jupiter.api.Assertions.assertEquals("agent_gateway_client", baseParams.get("client_id"));
+        org.junit.jupiter.api.Assertions.assertEquals("agt_business_001", baseParams.get("agent_id"));
 
         MvcResult approveBaseResult = mockMvc.perform(post("/mock/idaas/approve")
                         .param("flow", baseParams.get("flow"))
@@ -82,28 +82,51 @@ class AgentGatewayFlowTest {
                         .queryParam("code", queryParams(baseCallbackUri).get("code"))
                         .queryParam("state", queryParams(baseCallbackUri).get("state")))
                 .andExpect(status().isFound())
-                .andExpect(cookie().exists("gw_session_id"))
                 .andReturn();
 
         MockHttpServletResponse baseResponse = baseCallbackResult.getResponse();
+        assertNull(baseResponse.getCookie("gw_session_id"));
         String businessRedirect = baseResponse.getRedirectedUrl();
         Map<String, String> businessRedirectParams = queryParams(URI.create(businessRedirect));
-        String gwSessionToken = businessRedirectParams.get("gw_session_token");
-        Cookie gatewaySessionCookie = baseResponse.getCookie("gw_session_id");
+        String ticketST = businessRedirectParams.get("ticketST");
+        assertNull(businessRedirectParams.get("gw_session_token"));
+        assertNull(businessRedirectParams.get("user_id"));
+
+        mockMvc.perform(post("/gw/auth/ticket/exchange")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agent_id": "agt_business_001",
+                                  "ticketST": "%s"
+                                }
+                                """.formatted(ticketST)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.userId").value("z01062668"))
+                .andExpect(jsonPath("$.user.username").value("demo.user"));
+
+        mockMvc.perform(post("/gw/auth/ticket/exchange")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agent_id": "agt_business_001",
+                                  "ticketST": "%s"
+                                }
+                                """.formatted(ticketST)))
+                .andExpect(status().isUnauthorized());
 
         ResourceTokenRequest resourceTokenRequest = new ResourceTokenRequest(
                 "agt_business_001",
                 List.of("mcp:contract-server/get_contract"),
                 "http://localhost:18082/agent.html",
-                "outer_chat_state"
+                "outer_chat_state",
+                null
         );
 
         MvcResult firstTokenResult = mockMvc.perform(post("/gw/token/resource-token")
-                        .header("Authorization", "Bearer " + gwSessionToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(resourceTokenRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("redirect"))
+                .andExpect(jsonPath("$.status").value("REDIRECT_REQUIRED"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty())
                 .andExpect(jsonPath("$.redirectUrl").isNotEmpty())
                 .andReturn();
@@ -115,13 +138,14 @@ class AgentGatewayFlowTest {
         String requestId = queryParams(authorizeUri).get("request_id");
 
         MvcResult startConsentResult = mockMvc.perform(get(authorizeUri.getPath())
-                        .queryParam("request_id", requestId)
-                        .cookie(gatewaySessionCookie))
+                        .queryParam("request_id", requestId))
                 .andExpect(status().isFound())
                 .andReturn();
 
         URI mockIdaasConsentUri = URI.create(startConsentResult.getResponse().getRedirectedUrl());
         Map<String, String> consentParams = queryParams(mockIdaasConsentUri);
+        org.junit.jupiter.api.Assertions.assertEquals("agent_gateway_client", consentParams.get("client_id"));
+        org.junit.jupiter.api.Assertions.assertEquals("agt_business_001", consentParams.get("agent_id"));
 
         MvcResult approveConsentResult = mockMvc.perform(post("/mock/idaas/approve")
                         .param("flow", consentParams.get("flow"))
@@ -133,21 +157,41 @@ class AgentGatewayFlowTest {
                 .andReturn();
 
         URI consentCallbackUri = URI.create(approveConsentResult.getResponse().getRedirectedUrl());
-        mockMvc.perform(get(consentCallbackUri.getPath())
+        MvcResult consentCallbackResult = mockMvc.perform(get(consentCallbackUri.getPath())
                         .queryParam("code", queryParams(consentCallbackUri).get("code"))
                         .queryParam("state", queryParams(consentCallbackUri).get("state")))
-                .andExpect(status().isFound());
+                .andExpect(status().isFound())
+                .andReturn();
 
-        mockMvc.perform(post("/gw/token/resource-token")
-                        .header("Authorization", "Bearer " + gwSessionToken)
+        URI businessConsentRedirect = URI.create(consentCallbackResult.getResponse().getRedirectedUrl());
+        Map<String, String> consentRedirectParams = queryParams(businessConsentRedirect);
+        String tokenResultTicket = consentRedirectParams.get("token_result_ticket");
+
+        mockMvc.perform(post("/gw/token/result/exchange")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(resourceTokenRequest)))
+                        .content("""
+                                {
+                                  "agent_id": "agt_business_001",
+                                  "request_id": "%s",
+                                  "token_result_ticket": "%s"
+                                }
+                                """.formatted(requestId, tokenResultTicket)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("TOKEN_READY"))
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.expiresIn").isNumber())
-                .andExpect(jsonPath("$.status").doesNotExist())
-                .andExpect(jsonPath("$.redirectUrl").doesNotExist())
-                .andExpect(jsonPath("$.requestId").doesNotExist());
+                .andExpect(jsonPath("$.consentedScopes[0].code").value("erp:contract:r"));
+
+        mockMvc.perform(post("/gw/token/result/exchange")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agent_id": "agt_business_001",
+                                  "request_id": "%s",
+                                  "token_result_ticket": "%s"
+                                }
+                                """.formatted(requestId, tokenResultTicket)))
+                .andExpect(status().isUnauthorized());
     }
 
     private Map<String, String> queryParams(URI uri) {

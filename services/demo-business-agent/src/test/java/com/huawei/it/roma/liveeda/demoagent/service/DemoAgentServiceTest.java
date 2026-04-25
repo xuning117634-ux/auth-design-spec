@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,16 +53,15 @@ class DemoAgentServiceTest {
                 mockMcpGatewayClient,
                 new IdGenerator()
         );
-        siteSession = demoAgentService.createSiteSession("gwst_demo_001", "z01062668", "demo.user");
+        siteSession = demoAgentService.createSiteSession("z01062668", "demo.user");
     }
 
     @Test
     void shouldCacheGatewayTokenAndReuseForSameTools() {
         when(agentGatewayClient.requestResourceToken(
-                eq("gwst_demo_001"),
                 eq("agt_business_001"),
                 anyList(),
-                eq("http://localhost:18082/agent.html"),
+                eq("http://localhost:18082/agent"),
                 anyString()
         )).thenReturn(new GatewayTokenResponse("tr_demo_001", 1800L, null, null, null));
         when(mockMcpGatewayClient.extractAuthorizedPermissionPointCodes("tr_demo_001"))
@@ -83,10 +83,9 @@ class DemoAgentServiceTest {
         assertNotNull(second.answer());
 
         verify(agentGatewayClient, times(1)).requestResourceToken(
-                eq("gwst_demo_001"),
                 eq("agt_business_001"),
                 anyList(),
-                eq("http://localhost:18082/agent.html"),
+                eq("http://localhost:18082/agent"),
                 anyString()
         );
         verify(mockMcpGatewayClient, times(2)).invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString());
@@ -95,10 +94,9 @@ class DemoAgentServiceTest {
     @Test
     void shouldReturnRedirectWhenGatewayRequiresConsent() {
         when(agentGatewayClient.requestResourceToken(
-                eq("gwst_demo_001"),
                 eq("agt_business_001"),
                 anyList(),
-                eq("http://localhost:18082/agent.html"),
+                eq("http://localhost:18082/agent"),
                 anyString()
         )).thenReturn(new GatewayTokenResponse(null, null, "redirect", "http://localhost:18080/gw/auth/authorize?request_id=req_001", "req_001"));
 
@@ -107,5 +105,30 @@ class DemoAgentServiceTest {
         assertEquals("redirect", response.status());
         assertEquals("http://localhost:18080/gw/auth/authorize?request_id=req_001", response.redirectUrl());
         assertNotNull(response.state());
+    }
+
+    @Test
+    void shouldExchangeTokenResultTicketAndReuseCachedTr() {
+        when(agentGatewayClient.exchangeTokenResult("agt_business_001", "req_001", "trt_001"))
+                .thenReturn(new GatewayTokenResponse(
+                        "tr_demo_001",
+                        1800L,
+                        "TOKEN_READY",
+                        null,
+                        "req_001",
+                        new GatewayTokenResponse.AgencyUser("z01062668", "z01062668"),
+                        java.util.List.of(new GatewayTokenResponse.ConsentedScope("erp:contract:r", "ERP 合同的可读权限"))
+                ));
+        when(mockMcpGatewayClient.resolveCoveredTools("tr_demo_001"))
+                .thenReturn(java.util.Set.of("mcp:contract-server/get_contract"));
+        when(mockMcpGatewayClient.invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString()))
+                .thenReturn("模拟的合同查询结果");
+
+        demoAgentService.exchangeTokenResult(siteSession.siteSessionId(), "req_001", "trt_001");
+        ChatResponse response = demoAgentService.handleChat(siteSession.siteSessionId(), "请帮我看一下ERP合同");
+
+        assertEquals("answer", response.status());
+        assertEquals("cache", response.source());
+        verify(agentGatewayClient, never()).requestResourceToken(anyString(), anyList(), anyString(), anyString());
     }
 }

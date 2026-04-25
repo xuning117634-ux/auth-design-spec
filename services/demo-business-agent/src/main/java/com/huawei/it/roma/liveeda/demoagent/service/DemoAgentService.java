@@ -2,6 +2,7 @@ package com.huawei.it.roma.liveeda.demoagent.service;
 
 import com.huawei.it.roma.liveeda.demoagent.client.AgentGatewayClient;
 import com.huawei.it.roma.liveeda.demoagent.client.GatewayTokenResponse;
+import com.huawei.it.roma.liveeda.demoagent.client.LoginTicketExchangeResponse;
 import com.huawei.it.roma.liveeda.demoagent.config.DemoAgentProperties;
 import com.huawei.it.roma.liveeda.demoagent.domain.SiteSession;
 import com.huawei.it.roma.liveeda.demoagent.domain.TrCacheEntry;
@@ -14,6 +15,7 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -33,16 +35,38 @@ public class DemoAgentService {
     private final IdGenerator idGenerator;
     private final Clock clock = Clock.systemUTC();
 
-    public SiteSession createSiteSession(String gwSessionToken, String userId, String username) {
+    public SiteSession createSiteSession(String userId, String username) {
         SiteSession siteSession = new SiteSession(
                 idGenerator.next("site"),
-                gwSessionToken,
                 userId,
                 username,
                 clock.instant()
         );
         siteSessionStore.save(siteSession);
         return siteSession;
+    }
+
+    public SiteSession createSiteSessionFromTicket(String ticketST) {
+        LoginTicketExchangeResponse response = agentGatewayClient.exchangeLoginTicket(properties.getAgentId(), ticketST);
+        if (response == null || response.user() == null || response.user().userId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Agent 网关未返回可用的登录用户信息");
+        }
+        return createSiteSession(response.user().userId(), response.user().username());
+    }
+
+    public void exchangeTokenResult(String siteSessionId, String requestId, String tokenResultTicket) {
+        SiteSession siteSession = siteSessionStore.find(siteSessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "当前站点会话不存在，请重新登录"));
+        GatewayTokenResponse response = agentGatewayClient.exchangeTokenResult(
+                properties.getAgentId(),
+                requestId,
+                tokenResultTicket
+        );
+        if (response == null || !response.isTokenReady()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Agent 网关未返回可用的资源令牌");
+        }
+        ensureSameUser(siteSession, response);
+        saveTrCache(siteSession, response);
     }
 
     public void logout(String siteSessionId) {
@@ -82,10 +106,9 @@ public class DemoAgentService {
 
         String outerState = idGenerator.next("st_auth");
         GatewayTokenResponse gatewayTokenResponse = agentGatewayClient.requestResourceToken(
-                siteSession.gwSessionToken(),
                 properties.getAgentId(),
                 requiredTools.stream().sorted().toList(),
-                properties.getSelfBaseUrl() + "/agent.html",
+                properties.getSelfBaseUrl() + "/agent",
                 outerState
         );
         if (gatewayTokenResponse.isRedirect()) {
@@ -95,19 +118,7 @@ public class DemoAgentService {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Agent 网关未返回可用的资源令牌");
         }
 
-        TrCacheEntry merged = new TrCacheEntry(
-                siteSession.siteSessionId(),
-                properties.getAgentId(),
-                gatewayTokenResponse.accessToken(),
-                mergeCoveredTools(
-                        trCacheEntry.map(TrCacheEntry::coveredTools).orElse(Set.of()),
-                        mockMcpGatewayClient.resolveCoveredTools(gatewayTokenResponse.accessToken())
-                ),
-                mockMcpGatewayClient.extractAuthorizedPermissionPointCodes(gatewayTokenResponse.accessToken()),
-                Instant.now(clock).plusSeconds(gatewayTokenResponse.expiresIn() == null ? 3600 : gatewayTokenResponse.expiresIn())
-        );
-        trCacheStore.save(merged);
-
+        saveTrCache(siteSession, gatewayTokenResponse);
         String answer = mockMcpGatewayClient.invoke(
                 properties.getAgentId(),
                 gatewayTokenResponse.accessToken(),
@@ -118,6 +129,41 @@ public class DemoAgentService {
                 本次已完成授权并成功获取资源令牌，下面是模拟 Agent 的回答。
                 %s
                 """.formatted(answer).trim(), "gateway");
+    }
+
+    private void ensureSameUser(SiteSession siteSession, GatewayTokenResponse response) {
+        if (response.agencyUser() == null || response.agencyUser().userId() == null) {
+            return;
+        }
+        String tokenUserId = response.agencyUser().userId();
+        String tokenGlobalUserId = response.agencyUser().globalUserId();
+        boolean matched = siteSession.userId().equals(tokenUserId) || siteSession.userId().equals(tokenGlobalUserId);
+        if (!matched) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "TR 所属用户与当前站点会话不一致，请重新登录");
+        }
+    }
+
+    private void saveTrCache(SiteSession siteSession, GatewayTokenResponse gatewayTokenResponse) {
+        Set<String> coveredPermissionPointCodes = gatewayTokenResponse.consentedScopes() == null
+                ? Set.of()
+                : gatewayTokenResponse.consentedScopes().stream()
+                        .map(GatewayTokenResponse.ConsentedScope::code)
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (coveredPermissionPointCodes.isEmpty()) {
+            coveredPermissionPointCodes = mockMcpGatewayClient.extractAuthorizedPermissionPointCodes(
+                    gatewayTokenResponse.accessToken());
+        }
+        TrCacheEntry merged = new TrCacheEntry(
+                siteSession.siteSessionId(),
+                properties.getAgentId(),
+                gatewayTokenResponse.accessToken(),
+                mockMcpGatewayClient.resolveCoveredTools(gatewayTokenResponse.accessToken()),
+                coveredPermissionPointCodes,
+                Instant.now(clock).plusSeconds(gatewayTokenResponse.expiresIn() == null
+                        ? 3600
+                        : gatewayTokenResponse.expiresIn())
+        );
+        trCacheStore.save(merged);
     }
 
     private Set<String> mapRequiredTools(String message) {
@@ -133,11 +179,5 @@ public class DemoAgentService {
             tools.add("mcp:invoice-server/query_invoices");
         }
         return tools;
-    }
-
-    private Set<String> mergeCoveredTools(Set<String> currentTools, Set<String> newTools) {
-        Set<String> merged = new LinkedHashSet<>(currentTools);
-        merged.addAll(newTools);
-        return merged;
     }
 }

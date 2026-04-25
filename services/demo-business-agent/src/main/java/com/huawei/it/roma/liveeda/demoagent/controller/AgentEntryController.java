@@ -28,8 +28,6 @@ public class AgentEntryController {
     private final DemoAgentService demoAgentService;
     private final SiteSessionStore siteSessionStore;
 
-    private static final String GATEWAY_SESSION_COOKIE = "gw_session_id";
-
     @GetMapping("/session")
     public ResponseEntity<Map<String, String>> session(
             @CookieValue(name = DemoAgentService.SITE_SESSION_COOKIE, required = false) String siteSessionId
@@ -58,30 +56,22 @@ public class AgentEntryController {
                 .path("/")
                 .maxAge(0)
                 .build();
-        ResponseCookie gatewayCookie = ResponseCookie.from(GATEWAY_SESSION_COOKIE, "")
-                .httpOnly(true)
-                .secure(properties.isSecureCookies())
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(0)
-                .build();
 
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, siteCookie.toString())
-                .header(HttpHeaders.SET_COOKIE, gatewayCookie.toString())
                 .build();
     }
 
     @GetMapping
     public ResponseEntity<Void> enter(
-            @RequestParam(name = "gw_session_token", required = false) String gwSessionToken,
-            @RequestParam(name = "user_id", required = false) String userId,
-            @RequestParam(name = "username", required = false) String username,
+            @RequestParam(name = "ticketST", required = false) String ticketST,
+            @RequestParam(name = "token_result_ticket", required = false) String tokenResultTicket,
+            @RequestParam(name = "request_id", required = false) String requestId,
             @RequestParam(name = "state", required = false) String state,
             @CookieValue(name = DemoAgentService.SITE_SESSION_COOKIE, required = false) String siteSessionId
     ) {
-        if (gwSessionToken != null && userId != null && username != null) {
-            SiteSession siteSession = demoAgentService.createSiteSession(gwSessionToken, userId, username);
+        if (ticketST != null && !ticketST.isBlank()) {
+            SiteSession siteSession = demoAgentService.createSiteSessionFromTicket(ticketST);
             ResponseCookie cookie = ResponseCookie.from(DemoAgentService.SITE_SESSION_COOKIE, siteSession.siteSessionId())
                     .httpOnly(true)
                     .secure(properties.isSecureCookies())
@@ -97,6 +87,22 @@ public class AgentEntryController {
                     .header(HttpHeaders.SET_COOKIE, cookie.toString())
                     .location(redirect)
                     .build();
+        }
+
+        if (tokenResultTicket != null && !tokenResultTicket.isBlank() && requestId != null && !requestId.isBlank()) {
+            if (siteSessionId == null || siteSessionStore.find(siteSessionId).isEmpty()) {
+                URI loginRedirect = UriComponentsBuilder.fromHttpUrl(properties.getSelfBaseUrl())
+                        .path("/agent")
+                        .build(true)
+                        .toUri();
+                return ResponseEntity.status(HttpStatus.FOUND).location(loginRedirect).build();
+            }
+            demoAgentService.exchangeTokenResult(siteSessionId, requestId, tokenResultTicket);
+            URI redirect = UriComponentsBuilder.fromHttpUrl(properties.getSelfBaseUrl() + "/agent.html")
+                    .queryParamIfPresent("state", java.util.Optional.ofNullable(state))
+                    .build(true)
+                    .toUri();
+            return ResponseEntity.status(HttpStatus.FOUND).location(redirect).build();
         }
 
         if (siteSessionId != null && siteSessionStore.find(siteSessionId).isPresent()) {

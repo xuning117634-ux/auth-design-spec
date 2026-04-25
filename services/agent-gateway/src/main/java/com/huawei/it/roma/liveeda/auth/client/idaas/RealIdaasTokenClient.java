@@ -3,10 +3,10 @@ package com.huawei.it.roma.liveeda.auth.client.idaas;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.config.IdaasProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.domain.BaseLoginResult;
+import com.huawei.it.roma.liveeda.auth.domain.IssuedToken;
 import com.huawei.it.roma.liveeda.auth.domain.UserAuthorizationResult;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import java.time.Instant;
@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -28,25 +29,41 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
 
     private final RestClient.Builder restClientBuilder;
     private final IdaasProperties idaaSProperties;
-    private final AgentGatewayProperties properties;
 
     @Override
-    public BaseLoginResult exchangeBaseLoginCode(String code) {
-        TokenResponse response = exchangeToken(code, properties.getSelfBaseUrl() + "/gw/auth/base/callback");
-        DecodedJWT decodedJWT = JWT.decode(response.accessToken());
-        Map<String, Object> userClaim = decodedJWT.getClaim("user").asMap();
-        String userId = stringOrDefault(userClaim, "user_id", decodedJWT.getSubject());
-        String username = stringOrDefault(userClaim, "username", userId);
-        return new BaseLoginResult(userId, username);
+    public IssuedToken exchangeAuthorizationCode(String code, String redirectUri) {
+        TokenResponse response = exchangeToken(code, redirectUri);
+        Instant expiresAt = response.expiresAt();
+        if (expiresAt == null && response.expiresIn() != null) {
+            expiresAt = Instant.now().plusSeconds(response.expiresIn());
+        }
+        if (expiresAt == null) {
+            expiresAt = JWT.decode(response.accessToken()).getExpiresAtAsInstant();
+        }
+        return new IssuedToken(response.accessToken(), expiresAt);
     }
 
     @Override
-    public UserAuthorizationResult exchangeConsentCode(String code) {
-        TokenResponse response = exchangeToken(code, properties.getSelfBaseUrl() + "/gw/auth/consent/callback");
-        DecodedJWT decodedJWT = JWT.decode(response.accessToken());
-        Map<String, Object> userClaim = decodedJWT.getClaim("user").asMap();
-        String userId = stringOrDefault(userClaim, "user_id", decodedJWT.getSubject());
-        String username = stringOrDefault(userClaim, "username", userId);
+    public BaseLoginResult fetchUserInfo(String accessToken) {
+        RestClient restClient = restClientBuilder.baseUrl(idaaSProperties.getUserinfoUrl()).build();
+        UserInfoResponse response = restClient.get()
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .retrieve()
+                .body(UserInfoResponse.class);
+        if (response == null || response.userId() == null || response.userId().isBlank()) {
+            throw new GatewayException(HttpStatus.BAD_GATEWAY, "IDaaS userinfo endpoint returned empty user_id");
+        }
+        String uuid = response.uuid() == null || response.uuid().isBlank() ? response.userId() : response.uuid();
+        String username = response.username() == null || response.username().isBlank()
+                ? response.userId()
+                : response.username();
+        return new BaseLoginResult(response.userId(), uuid, username);
+    }
+
+    @Override
+    public UserAuthorizationResult fetchAuthorizationResult(IssuedToken tc) {
+        DecodedJWT decodedJWT = JWT.decode(tc.accessToken());
+        BaseLoginResult userInfo = fetchUserInfo(tc.accessToken());
         List<AuthorizedPermissionPoint> permissionPoints = extractConsentedScopes(decodedJWT);
         if (permissionPoints.isEmpty()) {
             throw new GatewayException(HttpStatus.BAD_GATEWAY,
@@ -56,12 +73,12 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
                 .map(AuthorizedPermissionPoint::code)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         return new UserAuthorizationResult(
-                userId,
-                username,
+                userInfo.userId(),
+                userInfo.username(),
                 permissionPointCodes,
                 permissionPoints,
-                response.accessToken(),
-                decodedJWT.getExpiresAtAsInstant()
+                tc.accessToken(),
+                tc.expiresAt()
         );
     }
 
@@ -98,7 +115,13 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
     private TokenResponse exchangeToken(String code, String redirectUri) {
         RestClient restClient = restClientBuilder.baseUrl(idaaSProperties.getTokenUrl()).build();
         TokenResponse response = restClient.post()
-                .body(new TokenRequest("authorization_code", code, idaaSProperties.getClientId(), redirectUri))
+                .body(new TokenRequest(
+                        "authorization_code",
+                        code,
+                        idaaSProperties.getClientId(),
+                        idaaSProperties.getClientSecret(),
+                        redirectUri
+                ))
                 .retrieve()
                 .body(TokenResponse.class);
         if (response == null || response.accessToken() == null || response.accessToken().isBlank()) {
@@ -107,15 +130,7 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
         return response;
     }
 
-    private String stringOrDefault(Map<String, Object> map, String key, String fallback) {
-        if (map == null) {
-            return fallback;
-        }
-        Object value = map.get(key);
-        return value == null ? fallback : String.valueOf(value);
-    }
-
-    private record TokenRequest(String grantType, String code, String clientId, String redirectUri) {
+    private record TokenRequest(String grantType, String code, String clientId, String clientSecret, String redirectUri) {
         @Override
         @JsonProperty("grant_type")
         public String grantType() {
@@ -129,6 +144,12 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
         }
 
         @Override
+        @JsonProperty("client_secret")
+        public String clientSecret() {
+            return clientSecret;
+        }
+
+        @Override
         @JsonProperty("redirect_uri")
         public String redirectUri() {
             return redirectUri;
@@ -137,7 +158,15 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
 
     private record TokenResponse(
             @JsonProperty("access_token") String accessToken,
-            @JsonProperty("expires_at") Instant expiresAt
+            @JsonProperty("expires_at") Instant expiresAt,
+            @JsonProperty("expires_in") Long expiresIn
+    ) {
+    }
+
+    private record UserInfoResponse(
+            @JsonProperty("user_id") String userId,
+            String uuid,
+            String username
     ) {
     }
 }

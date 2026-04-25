@@ -17,5 +17,11 @@ public class IdaasProperties {
     private String tokenUrl;
 
     @NotBlank
+    private String userinfoUrl;
+
+    @NotBlank
     private String clientId;
+
+    @NotBlank
+    private String clientSecret;
 }

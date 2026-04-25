@@ -2,6 +2,7 @@ package com.huawei.it.roma.liveeda.auth.domain;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public record PendingAuthTransaction(
@@ -12,7 +13,7 @@ public record PendingAuthTransaction(
         List<AuthorizedPermissionPoint> requiredPermissionPoints,
         URI returnUrl,
         String outerState,
-        String gatewaySessionId,
+        Map<String, String> subjectHint,
         String gwState
 ) {
     public PendingAuthTransaction withGwState(String updatedGwState) {
@@ -24,7 +25,7 @@ public record PendingAuthTransaction(
                 requiredPermissionPoints,
                 returnUrl,
                 outerState,
-                gatewaySessionId,
+                subjectHint,
                 updatedGwState
         );
     }

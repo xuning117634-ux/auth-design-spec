@@ -28,7 +28,9 @@ providers:
   idaas:
     authorize-url: http://localhost:${server.port}/mock/idaas/authorize
     token-url: http://localhost:${server.port}/mock/idaas/oauth2/token
+    userinfo-url: http://localhost:${server.port}/mock/idaas/oauth2/userinfo
     client-id: agent_gateway_client
+    client-secret: mock-client-secret
   iam:
     base-url: http://localhost:${server.port}/mock/iam
     proxy-project-id: proxy_project_001
