@@ -59,4 +59,19 @@ public interface PermissionPointToolRelMapper {
     List<PermissionPointToolRelRow> findActiveByPermissionPointCodes(
             @Param("permissionPointCodes") List<String> permissionPointCodes
     );
+
+    @Select({
+            "<script>",
+            "SELECT permission_point_code, tool_id",
+            "FROM pc_permission_point_tool_rel",
+            "WHERE permission_point_code IN",
+            "<foreach collection='permissionPointCodes' item='code' open='(' separator=',' close=')'>",
+            "#{code}",
+            "</foreach>",
+            "ORDER BY permission_point_code, tool_id",
+            "</script>"
+    })
+    List<PermissionPointToolRelRow> findByPermissionPointCodes(
+            @Param("permissionPointCodes") List<String> permissionPointCodes
+    );
 }

@@ -5,6 +5,8 @@ INSERT INTO pc_tool (tool_id, display_name_zh, created_at, updated_at) VALUES
 
 INSERT INTO pc_permission_point (
     permission_point_code,
+    enterprise,
+    app_id,
     display_name_zh,
     description,
     status,
@@ -12,14 +14,26 @@ INSERT INTO pc_permission_point (
     created_at,
     updated_at
 ) VALUES
-('erp:report:r', 'ERP 报表的可读权限', '允许读取 ERP 报表数据', 'ACTIVE', 'seed-demo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('erp:contract:r', 'ERP 合同的可读权限', '允许读取 ERP 合同数据', 'ACTIVE', 'seed-demo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('erp:invoice:r', 'ERP 发票的可读权限', '允许读取 ERP 发票数据', 'ACTIVE', 'seed-demo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('erp:report:r', 'ent_001', 'erp', 'ERP 报表的可读权限', '允许读取 ERP 报表数据', 'ACTIVE', 'seed-demo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('erp:contract:r', 'ent_001', 'erp', 'ERP 合同的可读权限', '允许读取 ERP 合同数据', 'ACTIVE', 'seed-demo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('erp:invoice:r', 'ent_001', 'erp', 'ERP 发票的可读权限', '允许读取 ERP 发票数据', 'ACTIVE', 'seed-demo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO pc_permission_point_tool_rel (permission_point_code, tool_id, created_at) VALUES
 ('erp:report:r', 'mcp:financial-report-server/query_monthly_report', CURRENT_TIMESTAMP),
 ('erp:contract:r', 'mcp:contract-server/get_contract', CURRENT_TIMESTAMP),
 ('erp:invoice:r', 'mcp:invoice-server/query_invoices', CURRENT_TIMESTAMP);
+
+INSERT INTO pc_agent_permission_point (
+    agent_id,
+    enterprise,
+    permission_point_code,
+    status,
+    created_at,
+    updated_at
+) VALUES
+('agt_business_001', 'ent_001', 'erp:report:r', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agt_business_001', 'ent_001', 'erp:contract:r', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agt_business_001', 'ent_001', 'erp:invoice:r', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO pc_agent_strategy (
     strategy_id,

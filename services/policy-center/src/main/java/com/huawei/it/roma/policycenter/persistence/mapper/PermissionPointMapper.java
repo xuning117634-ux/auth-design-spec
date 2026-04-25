@@ -13,7 +13,9 @@ public interface PermissionPointMapper {
 
     @Update("""
             UPDATE pc_permission_point
-            SET display_name_zh = #{displayNameZh},
+            SET enterprise = #{enterprise},
+                app_id = #{appId},
+                display_name_zh = #{displayNameZh},
                 description = #{description},
                 status = #{status},
                 last_sync_source = #{lastSyncSource},
@@ -25,6 +27,8 @@ public interface PermissionPointMapper {
     @Insert("""
             INSERT INTO pc_permission_point (
                 permission_point_code,
+                enterprise,
+                app_id,
                 display_name_zh,
                 description,
                 status,
@@ -34,6 +38,8 @@ public interface PermissionPointMapper {
             )
             VALUES (
                 #{permissionPointCode},
+                #{enterprise},
+                #{appId},
                 #{displayNameZh},
                 #{description},
                 #{status},
@@ -46,7 +52,7 @@ public interface PermissionPointMapper {
 
     @Select({
             "<script>",
-            "SELECT permission_point_code, display_name_zh, description, status, last_sync_source",
+            "SELECT permission_point_code, enterprise, app_id, display_name_zh, description, status, last_sync_source",
             "FROM pc_permission_point",
             "WHERE permission_point_code IN",
             "<foreach collection='permissionPointCodes' item='code' open='(' separator=',' close=')'>",
@@ -58,7 +64,7 @@ public interface PermissionPointMapper {
 
     @Select({
             "<script>",
-            "SELECT permission_point_code, display_name_zh, description, status, last_sync_source",
+            "SELECT permission_point_code, enterprise, app_id, display_name_zh, description, status, last_sync_source",
             "FROM pc_permission_point",
             "WHERE status = 'ACTIVE'",
             "AND permission_point_code IN",
@@ -69,4 +75,47 @@ public interface PermissionPointMapper {
             "</script>"
     })
     List<PermissionPointRow> findActiveByCodes(@Param("permissionPointCodes") List<String> permissionPointCodes);
+
+    @Select({
+            "<script>",
+            "SELECT permission_point_code, enterprise, app_id, display_name_zh, description, status, last_sync_source",
+            "FROM pc_permission_point",
+            "WHERE enterprise = #{enterprise}",
+            "<if test='appId != null'>",
+            "AND app_id = #{appId}",
+            "</if>",
+            "<if test='status != null'>",
+            "AND status = #{status}",
+            "</if>",
+            "<if test='permissionPointCodes != null and permissionPointCodes.size() > 0'>",
+            "AND permission_point_code IN",
+            "<foreach collection='permissionPointCodes' item='code' open='(' separator=',' close=')'>",
+            "#{code}",
+            "</foreach>",
+            "</if>",
+            "ORDER BY permission_point_code",
+            "</script>"
+    })
+    List<PermissionPointRow> query(
+            @Param("enterprise") String enterprise,
+            @Param("appId") String appId,
+            @Param("status") String status,
+            @Param("permissionPointCodes") List<String> permissionPointCodes
+    );
+
+    @Select({
+            "<script>",
+            "SELECT permission_point_code, enterprise, app_id, display_name_zh, description, status, last_sync_source",
+            "FROM pc_permission_point",
+            "WHERE enterprise = #{enterprise}",
+            "AND permission_point_code IN",
+            "<foreach collection='permissionPointCodes' item='code' open='(' separator=',' close=')'>",
+            "#{code}",
+            "</foreach>",
+            "</script>"
+    })
+    List<PermissionPointRow> findByEnterpriseAndCodes(
+            @Param("enterprise") String enterprise,
+            @Param("permissionPointCodes") List<String> permissionPointCodes
+    );
 }

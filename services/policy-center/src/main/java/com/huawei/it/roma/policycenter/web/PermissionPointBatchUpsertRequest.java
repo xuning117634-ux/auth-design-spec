@@ -13,6 +13,8 @@ public record PermissionPointBatchUpsertRequest(
 ) {
     public record Item(
             @NotBlank String permissionPointCode,
+            @NotBlank String enterprise,
+            @NotBlank String appId,
             @NotBlank String displayNameZh,
             @NotBlank String description,
             @NotEmpty List<@Valid BoundTool> boundTools,

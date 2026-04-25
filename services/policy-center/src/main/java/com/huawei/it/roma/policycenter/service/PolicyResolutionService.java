@@ -5,20 +5,26 @@ import com.huawei.it.roma.policycenter.domain.PermissionPointItem;
 import com.huawei.it.roma.policycenter.domain.StrategyCondition;
 import com.huawei.it.roma.policycenter.domain.ToolItem;
 import com.huawei.it.roma.policycenter.persistence.mapper.AgentStrategyMapper;
+import com.huawei.it.roma.policycenter.persistence.mapper.AgentPermissionPointMapper;
 import com.huawei.it.roma.policycenter.persistence.mapper.PermissionPointMapper;
 import com.huawei.it.roma.policycenter.persistence.mapper.PermissionPointToolRelMapper;
 import com.huawei.it.roma.policycenter.persistence.mapper.StrategyConditionValueMapper;
 import com.huawei.it.roma.policycenter.persistence.mapper.ToolMapper;
+import com.huawei.it.roma.policycenter.persistence.model.AgentPermissionPointRow;
 import com.huawei.it.roma.policycenter.persistence.model.AgentStrategyRow;
 import com.huawei.it.roma.policycenter.persistence.model.PermissionPointRow;
 import com.huawei.it.roma.policycenter.persistence.model.PermissionPointToolRelRow;
 import com.huawei.it.roma.policycenter.persistence.model.StrategyConditionValueRow;
 import com.huawei.it.roma.policycenter.persistence.model.ToolRow;
+import com.huawei.it.roma.policycenter.web.AgentPermissionPointBatchUpsertRequest;
+import com.huawei.it.roma.policycenter.web.AgentPermissionPointBatchUpsertResponse;
 import com.huawei.it.roma.policycenter.web.AgentStrategyBatchUpsertRequest;
 import com.huawei.it.roma.policycenter.web.AgentStrategyBatchUpsertResponse;
 import com.huawei.it.roma.policycenter.web.PermissionPointBatchUpsertRequest;
 import com.huawei.it.roma.policycenter.web.PermissionPointBatchUpsertResponse;
 import com.huawei.it.roma.policycenter.web.QueryAgentStrategiesResponse;
+import com.huawei.it.roma.policycenter.web.QueryPermissionPointsRequest;
+import com.huawei.it.roma.policycenter.web.QueryPermissionPointsResponse;
 import com.huawei.it.roma.policycenter.web.ResolveByCodesResponse;
 import com.huawei.it.roma.policycenter.web.ResolveByToolsResponse;
 import java.util.ArrayList;
@@ -46,6 +52,7 @@ public class PolicyResolutionService {
     private final PermissionPointMapper permissionPointMapper;
     private final ToolMapper toolMapper;
     private final PermissionPointToolRelMapper permissionPointToolRelMapper;
+    private final AgentPermissionPointMapper agentPermissionPointMapper;
     private final AgentStrategyMapper agentStrategyMapper;
     private final StrategyConditionValueMapper strategyConditionValueMapper;
 
@@ -53,12 +60,14 @@ public class PolicyResolutionService {
             PermissionPointMapper permissionPointMapper,
             ToolMapper toolMapper,
             PermissionPointToolRelMapper permissionPointToolRelMapper,
+            AgentPermissionPointMapper agentPermissionPointMapper,
             AgentStrategyMapper agentStrategyMapper,
             StrategyConditionValueMapper strategyConditionValueMapper
     ) {
         this.permissionPointMapper = permissionPointMapper;
         this.toolMapper = toolMapper;
         this.permissionPointToolRelMapper = permissionPointToolRelMapper;
+        this.agentPermissionPointMapper = agentPermissionPointMapper;
         this.agentStrategyMapper = agentStrategyMapper;
         this.strategyConditionValueMapper = strategyConditionValueMapper;
     }
@@ -107,6 +116,53 @@ public class PolicyResolutionService {
         return new AgentStrategyBatchUpsertResponse(agentId, results.size(), results);
     }
 
+    @Transactional
+    public AgentPermissionPointBatchUpsertResponse upsertAgentPermissionPoints(
+            AgentPermissionPointBatchUpsertRequest request
+    ) {
+        if (request == null || CollectionUtils.isEmpty(request.items())) {
+            throw new PolicyResolutionException("agent permission point items must not be empty");
+        }
+        String agentId = normalizeValue(request.agentId(), "agent_id");
+        String enterprise = normalizeValue(request.enterprise(), "enterprise");
+        normalizeValue(request.source(), "source");
+        List<NormalizedAgentPermissionPoint> subscriptions = request.items().stream()
+                .map(item -> new NormalizedAgentPermissionPoint(
+                        agentId,
+                        enterprise,
+                        normalizeValue(item.permissionPointCode(), "permission_point_code"),
+                        normalizeStatus(item.status())
+                ))
+                .collect(Collectors.toMap(
+                        NormalizedAgentPermissionPoint::permissionPointCode,
+                        item -> item,
+                        (left, right) -> right,
+                        TreeMap::new
+                ))
+                .values()
+                .stream()
+                .toList();
+        if (subscriptions.isEmpty()) {
+            throw new PolicyResolutionException("agent permission point items must not be empty");
+        }
+
+        ensurePermissionPointsExistInEnterprise(
+                enterprise,
+                subscriptions.stream()
+                        .map(NormalizedAgentPermissionPoint::permissionPointCode)
+                        .toList()
+        );
+        subscriptions.forEach(this::upsertAgentPermissionPoint);
+
+        List<AgentPermissionPointBatchUpsertResponse.ItemResult> results = subscriptions.stream()
+                .map(item -> new AgentPermissionPointBatchUpsertResponse.ItemResult(
+                        item.permissionPointCode(),
+                        "UPSERTED"
+                ))
+                .toList();
+        return new AgentPermissionPointBatchUpsertResponse(agentId, enterprise, results.size(), results);
+    }
+
     public ResolveByToolsResponse resolveByTools(List<String> requiredTools) {
         List<String> stableTools = sanitizeAndSort(requiredTools, "required_tools");
 
@@ -133,6 +189,63 @@ public class PolicyResolutionService {
                 .map(PermissionPointItem::code)
                 .toList();
         return new ResolveByToolsResponse(matchedPermissionPointCodes, permissionPoints);
+    }
+
+    public QueryPermissionPointsResponse queryPermissionPoints(QueryPermissionPointsRequest request) {
+        if (request == null) {
+            throw new PolicyResolutionException("query permission points request must not be null");
+        }
+        String enterprise = normalizeValue(request.enterprise(), "enterprise");
+        String appId = normalizeOptionalValue(request.appId());
+        String status = normalizeOptionalStatus(request.status());
+        List<String> permissionPointCodes = sanitizeOptionalAndSort(request.permissionPointCodes());
+
+        List<PermissionPointRow> rows = permissionPointMapper.query(enterprise, appId, status, permissionPointCodes);
+        if (rows.isEmpty()) {
+            return new QueryPermissionPointsResponse(List.of());
+        }
+
+        List<String> codes = rows.stream()
+                .map(PermissionPointRow::getPermissionPointCode)
+                .distinct()
+                .sorted()
+                .toList();
+        List<PermissionPointToolRelRow> relationRows = permissionPointToolRelMapper.findByPermissionPointCodes(codes);
+        List<String> toolIds = relationRows.stream()
+                .map(PermissionPointToolRelRow::getToolId)
+                .distinct()
+                .sorted()
+                .toList();
+        Map<String, ToolRow> toolsById = toolIds.isEmpty()
+                ? Map.of()
+                : toolMapper.findByToolIds(toolIds)
+                .stream()
+                .collect(Collectors.toMap(ToolRow::getToolId, row -> row));
+        Map<String, List<ToolItem>> toolsByPermissionPointCode = relationRows
+                .stream()
+                .collect(Collectors.groupingBy(
+                        PermissionPointToolRelRow::getPermissionPointCode,
+                        LinkedHashMap::new,
+                        Collectors.mapping(row -> {
+                            ToolRow tool = toolsById.get(row.getToolId());
+                            String displayNameZh = tool == null ? row.getToolId() : tool.getDisplayNameZh();
+                            return new ToolItem(row.getToolId(), displayNameZh);
+                        }, Collectors.toList())
+                ));
+
+        List<QueryPermissionPointsResponse.PermissionPoint> permissionPoints = rows.stream()
+                .sorted(Comparator.comparing(PermissionPointRow::getPermissionPointCode))
+                .map(row -> new QueryPermissionPointsResponse.PermissionPoint(
+                        row.getPermissionPointCode(),
+                        row.getEnterprise(),
+                        row.getAppId(),
+                        row.getDisplayNameZh(),
+                        row.getDescription(),
+                        List.copyOf(toolsByPermissionPointCode.getOrDefault(row.getPermissionPointCode(), List.of())),
+                        row.getStatus()
+                ))
+                .toList();
+        return new QueryPermissionPointsResponse(permissionPoints);
     }
 
     public ResolveByCodesResponse resolveByCodes(List<String> permissionPointCodes) {
@@ -214,6 +327,8 @@ public class PolicyResolutionService {
     private void upsertPermissionPoint(NormalizedPermissionPoint permissionPoint) {
         PermissionPointRow permissionPointRow = new PermissionPointRow(
                 permissionPoint.permissionPointCode(),
+                permissionPoint.enterprise(),
+                permissionPoint.appId(),
                 permissionPoint.displayNameZh(),
                 permissionPoint.description(),
                 permissionPoint.status(),
@@ -235,6 +350,18 @@ public class PolicyResolutionService {
         ToolRow toolRow = new ToolRow(tool.toolId(), tool.displayNameZh());
         if (toolMapper.update(toolRow) == 0) {
             toolMapper.insert(toolRow);
+        }
+    }
+
+    private void upsertAgentPermissionPoint(NormalizedAgentPermissionPoint subscription) {
+        AgentPermissionPointRow row = new AgentPermissionPointRow(
+                subscription.agentId(),
+                subscription.enterprise(),
+                subscription.permissionPointCode(),
+                subscription.status()
+        );
+        if (agentPermissionPointMapper.update(row) == 0) {
+            agentPermissionPointMapper.insert(row);
         }
     }
 
@@ -270,6 +397,8 @@ public class PolicyResolutionService {
     ) {
         return new NormalizedPermissionPoint(
                 normalizeValue(item.permissionPointCode(), "permission_point_code"),
+                normalizeValue(item.enterprise(), "enterprise"),
+                normalizeValue(item.appId(), "app_id"),
                 normalizeValue(item.displayNameZh(), "display_name_zh"),
                 normalizeValue(item.description(), "description"),
                 normalizeBoundTools(item.boundTools()),
@@ -336,6 +465,18 @@ public class PolicyResolutionService {
         });
     }
 
+    private void ensurePermissionPointsExistInEnterprise(String enterprise, List<String> permissionPointCodes) {
+        List<PermissionPointRow> rows = permissionPointMapper.findByEnterpriseAndCodes(enterprise, permissionPointCodes);
+        Set<String> existingCodes = rows.stream()
+                .map(PermissionPointRow::getPermissionPointCode)
+                .collect(Collectors.toSet());
+        permissionPointCodes.forEach(code -> {
+            if (!existingCodes.contains(code)) {
+                throw new PolicyResolutionException("Unknown permission_point_code in enterprise: " + code);
+            }
+        });
+    }
+
     private PermissionPointItem toPermissionPointItem(PermissionPointRow row) {
         return new PermissionPointItem(row.getPermissionPointCode(), row.getDisplayNameZh());
     }
@@ -376,6 +517,18 @@ public class PolicyResolutionService {
         return normalizedStatus;
     }
 
+    private String normalizeOptionalStatus(String status) {
+        String normalizedStatus = normalizeOptionalValue(status);
+        if (normalizedStatus == null) {
+            return null;
+        }
+        normalizedStatus = normalizedStatus.toUpperCase();
+        if (!SUPPORTED_STATUSES.contains(normalizedStatus)) {
+            throw new PolicyResolutionException("Unsupported status: " + normalizedStatus);
+        }
+        return normalizedStatus;
+    }
+
     private String normalizeValue(String value, String fieldName) {
         String normalizedValue = value == null ? "" : value.trim();
         if (normalizedValue.isEmpty()) {
@@ -408,8 +561,22 @@ public class PolicyResolutionService {
         return sanitized;
     }
 
+    private List<String> sanitizeOptionalAndSort(List<String> values) {
+        if (CollectionUtils.isEmpty(values)) {
+            return List.of();
+        }
+        return values.stream()
+                .map(value -> value == null ? "" : value.trim())
+                .filter(value -> !value.isEmpty())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
     private record NormalizedPermissionPoint(
             String permissionPointCode,
+            String enterprise,
+            String appId,
             String displayNameZh,
             String description,
             List<NormalizedBoundTool> boundTools,
@@ -421,6 +588,14 @@ public class PolicyResolutionService {
     private record NormalizedBoundTool(
             String toolId,
             String displayNameZh
+    ) {
+    }
+
+    private record NormalizedAgentPermissionPoint(
+            String agentId,
+            String enterprise,
+            String permissionPointCode,
+            String status
     ) {
     }
 

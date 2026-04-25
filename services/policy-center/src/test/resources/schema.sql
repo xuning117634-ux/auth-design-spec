@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS pc_agent_strategy_condition_value;
 DROP TABLE IF EXISTS pc_agent_strategy;
+DROP TABLE IF EXISTS pc_agent_permission_point;
 DROP TABLE IF EXISTS pc_permission_point_tool_rel;
 DROP TABLE IF EXISTS pc_permission_point;
 DROP TABLE IF EXISTS pc_tool;
@@ -13,6 +14,8 @@ CREATE TABLE pc_tool (
 
 CREATE TABLE pc_permission_point (
     permission_point_code VARCHAR(128) PRIMARY KEY,
+    enterprise VARCHAR(128) NOT NULL,
+    app_id VARCHAR(128) NOT NULL,
     display_name_zh VARCHAR(255) NOT NULL,
     description VARCHAR(1000) NOT NULL,
     status VARCHAR(16) NOT NULL,
@@ -30,6 +33,18 @@ CREATE TABLE pc_permission_point_tool_rel (
         FOREIGN KEY (permission_point_code) REFERENCES pc_permission_point(permission_point_code),
     CONSTRAINT fk_pc_rel_tool
         FOREIGN KEY (tool_id) REFERENCES pc_tool(tool_id)
+);
+
+CREATE TABLE pc_agent_permission_point (
+    agent_id VARCHAR(128) NOT NULL,
+    enterprise VARCHAR(128) NOT NULL,
+    permission_point_code VARCHAR(128) NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (agent_id, enterprise, permission_point_code),
+    CONSTRAINT fk_pc_agent_perm_permission_point
+        FOREIGN KEY (permission_point_code) REFERENCES pc_permission_point(permission_point_code)
 );
 
 CREATE TABLE pc_agent_strategy (
@@ -60,6 +75,15 @@ CREATE INDEX idx_pc_permission_point_tool_rel_tool_id
 
 CREATE INDEX idx_pc_permission_point_tool_rel_permission_point_code
     ON pc_permission_point_tool_rel (permission_point_code);
+
+CREATE INDEX idx_pc_permission_point_enterprise_app_status
+    ON pc_permission_point (enterprise, app_id, status);
+
+CREATE INDEX idx_pc_agent_permission_point_agent_enterprise_status
+    ON pc_agent_permission_point (agent_id, enterprise, status);
+
+CREATE INDEX idx_pc_agent_permission_point_permission_point_status
+    ON pc_agent_permission_point (permission_point_code, status);
 
 CREATE INDEX idx_pc_agent_strategy_agent_perm_status
     ON pc_agent_strategy (agent_id, permission_point_code, status);

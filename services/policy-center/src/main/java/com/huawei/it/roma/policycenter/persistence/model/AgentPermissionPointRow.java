@@ -7,13 +7,10 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class PermissionPointRow {
+public class AgentPermissionPointRow {
 
-    private String permissionPointCode;
+    private String agentId;
     private String enterprise;
-    private String appId;
-    private String displayNameZh;
-    private String description;
+    private String permissionPointCode;
     private String status;
-    private String lastSyncSource;
 }

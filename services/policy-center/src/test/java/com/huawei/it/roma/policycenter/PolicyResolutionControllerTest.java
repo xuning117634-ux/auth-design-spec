@@ -47,6 +47,8 @@ class PolicyResolutionControllerTest {
                                   "items": [
                                     {
                                       "permissionPointCode": "erp:contract:r",
+                                      "enterprise": "ent_001",
+                                      "appId": "erp",
                                       "displayNameZh": "ERP 合同的可读权限",
                                       "description": "允许读取 ERP 合同数据",
                                       "boundTools": [
@@ -140,6 +142,8 @@ class PolicyResolutionControllerTest {
                                   "items": [
                                     {
                                       "permissionPointCode": "erp:contract:r",
+                                      "enterprise": "ent_001",
+                                      "appId": "erp",
                                       "displayNameZh": "ERP 合同的可读权限",
                                       "description": "允许读取 ERP 合同数据",
                                       "boundTools": [
@@ -194,6 +198,8 @@ class PolicyResolutionControllerTest {
                                   "items": [
                                     {
                                       "permissionPointCode": "erp:contract:r",
+                                      "enterprise": "ent_001",
+                                      "appId": "erp",
                                       "displayNameZh": "ERP 合同的可读权限",
                                       "description": "允许读取 ERP 合同数据",
                                       "boundTools": [
@@ -217,6 +223,8 @@ class PolicyResolutionControllerTest {
                                   "items": [
                                     {
                                       "permissionPointCode": "erp:contract:r",
+                                      "enterprise": "ent_001",
+                                      "appId": "erp",
                                       "displayNameZh": "ERP 合同的可读权限",
                                       "description": "允许读取 ERP 合同数据",
                                       "boundTools": [
@@ -244,6 +252,97 @@ class PolicyResolutionControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requiredPermissionPointCodes[0]").value("erp:contract:r"));
+    }
+
+    @Test
+    void shouldQueryPermissionPointsByEnterpriseAndOptionalFilters() throws Exception {
+        mockMvc.perform(post("/internal/v1/permission-points/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "enterprise": "ent_001",
+                                  "appId": "erp",
+                                  "status": "ACTIVE",
+                                  "permissionPointCodes": [
+                                    "erp:contract:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissionPoints.length()").value(1))
+                .andExpect(jsonPath("$.permissionPoints[0].permissionPointCode").value("erp:contract:r"))
+                .andExpect(jsonPath("$.permissionPoints[0].enterprise").value("ent_001"))
+                .andExpect(jsonPath("$.permissionPoints[0].appId").value("erp"))
+                .andExpect(jsonPath("$.permissionPoints[0].boundTools[0].toolId")
+                        .value("mcp:contract-server/get_contract"));
+
+        mockMvc.perform(post("/internal/v1/permission-points/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "enterprise": "ent_001"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissionPoints.length()").value(3));
+
+        mockMvc.perform(post("/internal/v1/permission-points/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "appId": "erp"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldUpsertAgentPermissionPointSubscriptionsWithRelationshipStatus() throws Exception {
+        mockMvc.perform(put("/internal/v1/agent-permission-points/batch-upsert")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agentId": "agt_business_001",
+                                  "enterprise": "ent_001",
+                                  "source": "agent-gateway",
+                                  "items": [
+                                    {
+                                      "permissionPointCode": "erp:contract:r",
+                                      "status": "ACTIVE"
+                                    },
+                                    {
+                                      "permissionPointCode": "erp:invoice:r",
+                                      "status": "INACTIVE"
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.agentId").value("agt_business_001"))
+                .andExpect(jsonPath("$.enterprise").value("ent_001"))
+                .andExpect(jsonPath("$.upsertedCount").value(2))
+                .andExpect(jsonPath("$.items[0].permissionPointCode").value("erp:contract:r"))
+                .andExpect(jsonPath("$.items[1].permissionPointCode").value("erp:invoice:r"));
+    }
+
+    @Test
+    void shouldRejectAgentPermissionPointSubscriptionForUnknownPermissionPoint() throws Exception {
+        mockMvc.perform(put("/internal/v1/agent-permission-points/batch-upsert")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agentId": "agt_business_001",
+                                  "enterprise": "ent_001",
+                                  "source": "agent-gateway",
+                                  "items": [
+                                    {
+                                      "permissionPointCode": "erp:unknown:r",
+                                      "status": "ACTIVE"
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
