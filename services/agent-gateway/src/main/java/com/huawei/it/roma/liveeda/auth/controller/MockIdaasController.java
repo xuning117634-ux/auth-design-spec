@@ -16,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -40,7 +39,7 @@ public class MockIdaasController {
     private final AgentGatewayProperties properties;
     private final IdGenerator idGenerator;
 
-    @GetMapping(value = "/authorize", produces = MediaType.TEXT_HTML_VALUE)
+    @GetMapping(value = "/authorize", produces = "text/html;charset=UTF-8")
     public String authorizePage(
             @RequestParam("flow") String flow,
             @RequestParam("redirect_uri") String redirectUri,
@@ -165,7 +164,7 @@ public class MockIdaasController {
                         <div style="margin-top: 8px;"><strong>申请范围：</strong><code>%s</code></div>
                       </div>
                       <button type="submit">登录并继续</button>
-                      <div class="tip">这里提交的账号和显示名会进入后续网关会话，密码仅作为本地演示输入项使用。</div>
+                      <div class="tip">这里提交的账号和显示名会进入后续网关流程，密码仅作为本地演示输入项使用。</div>
                     </form>
                   </div>
                 </body>
@@ -222,7 +221,7 @@ public class MockIdaasController {
                   <div class="card">
                     <div class="badge">Mock IDaaS</div>
                     <h1>授权确认</h1>
-                    <p>当前登录用户 <code>%s</code>（%s） 正在为业务 Agent 授权以下权限点，用于后续换取可访问资源的 <code>TR</code>。</p>
+                    <p>当前登录用户 <code>%s</code>（%s）正在为业务 Agent 授权以下权限点，用于后续换取可访问资源的 <code>TR</code>。</p>
                     <div class="consent-box">
                       <strong>本次申请范围：</strong>
                       <ul>%s</ul>

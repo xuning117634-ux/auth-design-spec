@@ -120,47 +120,28 @@ public class PolicyResolutionService {
     public AgentPermissionPointBatchUpsertResponse upsertAgentPermissionPoints(
             AgentPermissionPointBatchUpsertRequest request
     ) {
-        if (request == null || CollectionUtils.isEmpty(request.items())) {
-            throw new PolicyResolutionException("agent permission point items must not be empty");
+        if (request == null || request.permissionPointCodes() == null) {
+            throw new PolicyResolutionException("permission_point_codes must not be null");
         }
         String agentId = normalizeValue(request.agentId(), "agent_id");
         String enterprise = normalizeValue(request.enterprise(), "enterprise");
-        normalizeValue(request.source(), "source");
-        List<NormalizedAgentPermissionPoint> subscriptions = request.items().stream()
-                .map(item -> new NormalizedAgentPermissionPoint(
-                        agentId,
-                        enterprise,
-                        normalizeValue(item.permissionPointCode(), "permission_point_code"),
-                        normalizeStatus(item.status())
-                ))
-                .collect(Collectors.toMap(
-                        NormalizedAgentPermissionPoint::permissionPointCode,
-                        item -> item,
-                        (left, right) -> right,
-                        TreeMap::new
-                ))
-                .values()
-                .stream()
-                .toList();
-        if (subscriptions.isEmpty()) {
-            throw new PolicyResolutionException("agent permission point items must not be empty");
-        }
+        String source = normalizeValue(request.source(), "source");
+        List<String> permissionPointCodes = sanitizeOptionalPermissionPointCodes(request.permissionPointCodes());
 
-        ensurePermissionPointsExistInEnterprise(
+        ensurePermissionPointsExistInEnterprise(enterprise, permissionPointCodes);
+        upsertAgentPermissionPoint(new NormalizedAgentPermissionPoint(
+                agentId,
                 enterprise,
-                subscriptions.stream()
-                        .map(NormalizedAgentPermissionPoint::permissionPointCode)
-                        .toList()
-        );
-        subscriptions.forEach(this::upsertAgentPermissionPoint);
+                String.join(",", permissionPointCodes),
+                source
+        ));
 
-        List<AgentPermissionPointBatchUpsertResponse.ItemResult> results = subscriptions.stream()
-                .map(item -> new AgentPermissionPointBatchUpsertResponse.ItemResult(
-                        item.permissionPointCode(),
-                        "UPSERTED"
-                ))
-                .toList();
-        return new AgentPermissionPointBatchUpsertResponse(agentId, enterprise, results.size(), results);
+        return new AgentPermissionPointBatchUpsertResponse(
+                agentId,
+                enterprise,
+                permissionPointCodes.size(),
+                permissionPointCodes
+        );
     }
 
     public ResolveByToolsResponse resolveByTools(List<String> requiredTools) {
@@ -357,8 +338,8 @@ public class PolicyResolutionService {
         AgentPermissionPointRow row = new AgentPermissionPointRow(
                 subscription.agentId(),
                 subscription.enterprise(),
-                subscription.permissionPointCode(),
-                subscription.status()
+                subscription.permissionPointCodes(),
+                subscription.source()
         );
         if (agentPermissionPointMapper.update(row) == 0) {
             agentPermissionPointMapper.insert(row);
@@ -396,7 +377,7 @@ public class PolicyResolutionService {
             String source
     ) {
         return new NormalizedPermissionPoint(
-                normalizeValue(item.permissionPointCode(), "permission_point_code"),
+                normalizePermissionPointCode(item.permissionPointCode(), "permission_point_code"),
                 normalizeValue(item.enterprise(), "enterprise"),
                 normalizeValue(item.appId(), "app_id"),
                 normalizeValue(item.displayNameZh(), "display_name_zh"),
@@ -466,6 +447,9 @@ public class PolicyResolutionService {
     }
 
     private void ensurePermissionPointsExistInEnterprise(String enterprise, List<String> permissionPointCodes) {
+        if (permissionPointCodes.isEmpty()) {
+            return;
+        }
         List<PermissionPointRow> rows = permissionPointMapper.findByEnterpriseAndCodes(enterprise, permissionPointCodes);
         Set<String> existingCodes = rows.stream()
                 .map(PermissionPointRow::getPermissionPointCode)
@@ -537,6 +521,14 @@ public class PolicyResolutionService {
         return normalizedValue;
     }
 
+    private String normalizePermissionPointCode(String value, String fieldName) {
+        String normalizedValue = normalizeValue(value, fieldName);
+        if (normalizedValue.contains(",")) {
+            throw new PolicyResolutionException(fieldName + " must not contain comma");
+        }
+        return normalizedValue;
+    }
+
     private String normalizeOptionalValue(String value) {
         if (value == null) {
             return null;
@@ -573,6 +565,24 @@ public class PolicyResolutionService {
                 .toList();
     }
 
+    private List<String> sanitizeOptionalPermissionPointCodes(List<String> values) {
+        if (values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .map(value -> value == null ? "" : value.trim())
+                .filter(value -> !value.isEmpty())
+                .map(value -> {
+                    if (value.contains(",")) {
+                        throw new PolicyResolutionException("permission_point_codes must not contain comma");
+                    }
+                    return value;
+                })
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
     private record NormalizedPermissionPoint(
             String permissionPointCode,
             String enterprise,
@@ -594,8 +604,8 @@ public class PolicyResolutionService {
     private record NormalizedAgentPermissionPoint(
             String agentId,
             String enterprise,
-            String permissionPointCode,
-            String status
+            String permissionPointCodes,
+            String source
     ) {
     }
 

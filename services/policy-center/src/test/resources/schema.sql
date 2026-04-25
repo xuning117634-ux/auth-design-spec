@@ -38,13 +38,11 @@ CREATE TABLE pc_permission_point_tool_rel (
 CREATE TABLE pc_agent_permission_point (
     agent_id VARCHAR(128) NOT NULL,
     enterprise VARCHAR(128) NOT NULL,
-    permission_point_code VARCHAR(128) NOT NULL,
-    status VARCHAR(16) NOT NULL,
+    permission_point_codes VARCHAR(4000) NOT NULL,
+    last_sync_source VARCHAR(64) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (agent_id, enterprise, permission_point_code),
-    CONSTRAINT fk_pc_agent_perm_permission_point
-        FOREIGN KEY (permission_point_code) REFERENCES pc_permission_point(permission_point_code)
+    PRIMARY KEY (agent_id, enterprise)
 );
 
 CREATE TABLE pc_agent_strategy (
@@ -78,12 +76,6 @@ CREATE INDEX idx_pc_permission_point_tool_rel_permission_point_code
 
 CREATE INDEX idx_pc_permission_point_enterprise_app_status
     ON pc_permission_point (enterprise, app_id, status);
-
-CREATE INDEX idx_pc_agent_permission_point_agent_enterprise_status
-    ON pc_agent_permission_point (agent_id, enterprise, status);
-
-CREATE INDEX idx_pc_agent_permission_point_permission_point_status
-    ON pc_agent_permission_point (permission_point_code, status);
 
 CREATE INDEX idx_pc_agent_strategy_agent_perm_status
     ON pc_agent_strategy (agent_id, permission_point_code, status);

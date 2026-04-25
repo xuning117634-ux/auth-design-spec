@@ -43,15 +43,11 @@ CREATE TABLE pc_permission_point_tool_rel (
 CREATE TABLE pc_agent_permission_point (
     agent_id VARCHAR(128) NOT NULL,
     enterprise VARCHAR(128) NOT NULL,
-    permission_point_code VARCHAR(128) NOT NULL,
-    status VARCHAR(16) NOT NULL,
+    permission_point_codes TEXT NOT NULL,
+    last_sync_source VARCHAR(64) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (agent_id, enterprise, permission_point_code),
-    KEY idx_pc_agent_perm_agent_enterprise_status (agent_id, enterprise, status),
-    KEY idx_pc_agent_perm_permission_point_status (permission_point_code, status),
-    CONSTRAINT fk_pc_agent_perm_permission_point
-        FOREIGN KEY (permission_point_code) REFERENCES pc_permission_point(permission_point_code)
+    PRIMARY KEY (agent_id, enterprise)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE pc_agent_strategy (

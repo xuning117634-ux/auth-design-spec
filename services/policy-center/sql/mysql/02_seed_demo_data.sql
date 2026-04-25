@@ -42,16 +42,15 @@ INSERT INTO pc_permission_point_tool_rel (permission_point_code, tool_id, create
 INSERT INTO pc_agent_permission_point (
     agent_id,
     enterprise,
-    permission_point_code,
-    status,
+    permission_point_codes,
+    last_sync_source,
     created_at,
     updated_at
 ) VALUES
-('agt_business_001', 'ent_001', 'erp:report:r', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agt_business_001', 'ent_001', 'erp:contract:r', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agt_business_001', 'ent_001', 'erp:invoice:r', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('agt_business_001', 'ent_001', 'erp:contract:r,erp:invoice:r,erp:report:r', 'seed-demo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE
-    status = VALUES(status),
+    permission_point_codes = VALUES(permission_point_codes),
+    last_sync_source = VALUES(last_sync_source),
     updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO pc_agent_strategy (

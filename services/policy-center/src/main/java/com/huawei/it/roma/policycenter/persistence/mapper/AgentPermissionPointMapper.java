@@ -10,11 +10,11 @@ public interface AgentPermissionPointMapper {
 
     @Update("""
             UPDATE pc_agent_permission_point
-            SET status = #{status},
+            SET permission_point_codes = #{permissionPointCodes},
+                last_sync_source = #{lastSyncSource},
                 updated_at = CURRENT_TIMESTAMP
             WHERE agent_id = #{agentId}
               AND enterprise = #{enterprise}
-              AND permission_point_code = #{permissionPointCode}
             """)
     int update(AgentPermissionPointRow row);
 
@@ -22,16 +22,16 @@ public interface AgentPermissionPointMapper {
             INSERT INTO pc_agent_permission_point (
                 agent_id,
                 enterprise,
-                permission_point_code,
-                status,
+                permission_point_codes,
+                last_sync_source,
                 created_at,
                 updated_at
             )
             VALUES (
                 #{agentId},
                 #{enterprise},
-                #{permissionPointCode},
-                #{status},
+                #{permissionPointCodes},
+                #{lastSyncSource},
                 CURRENT_TIMESTAMP,
                 CURRENT_TIMESTAMP
             )

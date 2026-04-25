@@ -11,6 +11,6 @@ public class AgentPermissionPointRow {
 
     private String agentId;
     private String enterprise;
-    private String permissionPointCode;
-    private String status;
+    private String permissionPointCodes;
+    private String lastSyncSource;
 }
