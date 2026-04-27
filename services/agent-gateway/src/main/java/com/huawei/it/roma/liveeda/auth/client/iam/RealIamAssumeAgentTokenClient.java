@@ -24,6 +24,8 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
     @Override
     public IssuedToken assumeAgentToken(AgentRegistryEntry agentRegistryEntry) {
         RestClient restClient = restClientBuilder.baseUrl(iamProperties.getBaseUrl()).build();
+        String delegatorAppId = agentRegistryEntry.appId();
+        String delegatorAccountName = "Agent_" + delegatorAppId;
         TokenResponse response = restClient.post()
                 .uri("/iam/projects/{proxyProjectId}/assume_agent_token", iamProperties.getProxyProjectId())
                 // TODO: switch this placeholder header to the IAM SDK result after the real delegation flow is wired in.
@@ -32,10 +34,9 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
                         new AssumeAgentTokenData(
                                 "assume_agent_token",
                                 new AssumeAgentTokenAttributes(
-                                        // TODO: load delegator account data from persisted agent registration instead of config.
-                                        iamProperties.getDelegatorAccountName(),
-                                        iamProperties.getDelegatorAppid(),
-                                        iamProperties.getAgentId()
+                                        delegatorAccountName,
+                                        delegatorAppId,
+                                        agentRegistryEntry.agentId()
                                 )
                         )
                 ))

@@ -1,5 +1,6 @@
 package com.huawei.it.roma.liveeda.auth.service;
 
+import com.huawei.it.roma.liveeda.auth.client.AgentManagementClient;
 import com.huawei.it.roma.liveeda.auth.client.idaas.IdaasAuthorizeSupport;
 import com.huawei.it.roma.liveeda.auth.client.idaas.IdaasTokenClient;
 import com.huawei.it.roma.liveeda.auth.client.iam.IamAssumeAgentTokenClient;
@@ -7,7 +8,6 @@ import com.huawei.it.roma.liveeda.auth.client.iam.IamResourceTokenClient;
 import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.config.IdaasProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
-import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.domain.BaseLoginResult;
 import com.huawei.it.roma.liveeda.auth.domain.IssuedToken;
 import com.huawei.it.roma.liveeda.auth.domain.LoginTicket;
@@ -15,7 +15,6 @@ import com.huawei.it.roma.liveeda.auth.domain.PendingAuthTransaction;
 import com.huawei.it.roma.liveeda.auth.domain.PendingBaseLogin;
 import com.huawei.it.roma.liveeda.auth.domain.TokenResultTicket;
 import com.huawei.it.roma.liveeda.auth.domain.UserAuthorizationResult;
-import com.huawei.it.roma.liveeda.auth.store.AgentRegistryStore;
 import com.huawei.it.roma.liveeda.auth.store.LoginTicketStore;
 import com.huawei.it.roma.liveeda.auth.store.PendingAuthTransactionStore;
 import com.huawei.it.roma.liveeda.auth.store.PendingBaseLoginStore;
@@ -28,7 +27,6 @@ import com.huawei.it.roma.liveeda.auth.web.TokenResultExchangeRequest;
 import com.huawei.it.roma.liveeda.auth.web.TokenResultExchangeResponse;
 import java.net.URI;
 import java.time.Clock;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -40,7 +38,7 @@ public class GatewayAuthService {
 
     private final AgentGatewayProperties properties;
     private final IdaasProperties idaasProperties;
-    private final AgentRegistryStore agentRegistryStore;
+    private final AgentManagementClient agentManagementClient;
     private final PendingBaseLoginStore pendingBaseLoginStore;
     private final PendingAuthTransactionStore pendingAuthTransactionStore;
     private final LoginTicketStore loginTicketStore;
@@ -54,7 +52,7 @@ public class GatewayAuthService {
     private final Clock clock;
 
     public URI startBaseLogin(String agentId, String returnUrl, String outerState) {
-        AgentRegistryEntry agentRegistryEntry = agentRegistryStore.require(agentId);
+        AgentRegistryEntry agentRegistryEntry = agentManagementClient.getGatewayProfile(agentId);
         URI validatedReturnUrl = returnUrlValidator.validate(agentRegistryEntry, returnUrl);
         String gwState = idGenerator.next("gw_state");
         pendingBaseLoginStore.save(new PendingBaseLogin(gwState, agentId, validatedReturnUrl, outerState));
@@ -119,15 +117,12 @@ public class GatewayAuthService {
                 .orElseThrow(() -> new GatewayException(HttpStatus.UNAUTHORIZED, "Unknown gw_state"));
         pendingAuthTransactionStore.delete(transaction);
 
-        AgentRegistryEntry agentRegistryEntry = agentRegistryStore.require(transaction.agentId());
+        AgentRegistryEntry agentRegistryEntry = agentManagementClient.getGatewayProfile(transaction.agentId());
         IssuedToken tc = idaasTokenClient.exchangeAuthorizationCode(
                 code,
                 properties.getSelfBaseUrl() + "/gw/auth/consent/callback"
         );
-        UserAuthorizationResult authorizationResult = ensureConsentedScopes(
-                idaasTokenClient.fetchAuthorizationResult(tc),
-                transaction.requiredPermissionPoints()
-        );
+        UserAuthorizationResult authorizationResult = idaasTokenClient.fetchAuthorizationResult(tc);
         IssuedToken t1 = iamAssumeAgentTokenClient.assumeAgentToken(agentRegistryEntry);
         IssuedToken tr = iamResourceTokenClient.issueResourceToken(agentRegistryEntry, authorizationResult, t1);
 
@@ -175,22 +170,4 @@ public class GatewayAuthService {
         );
     }
 
-    private UserAuthorizationResult ensureConsentedScopes(
-            UserAuthorizationResult authorizationResult,
-            List<AuthorizedPermissionPoint> fallbackPermissionPoints
-    ) {
-        if (authorizationResult.authorizedPermissionPoints() != null
-                && !authorizationResult.authorizedPermissionPoints().isEmpty()) {
-            return authorizationResult;
-        }
-        return new UserAuthorizationResult(
-                authorizationResult.userId(),
-                authorizationResult.username(),
-                fallbackPermissionPoints.stream().map(AuthorizedPermissionPoint::code)
-                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new)),
-                fallbackPermissionPoints,
-                authorizationResult.accessToken(),
-                authorizationResult.expiresAt()
-        );
-    }
 }

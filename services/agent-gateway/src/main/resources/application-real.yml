@@ -1,0 +1,7 @@
+providers:
+  idaas:
+    authorize-url: ${IDAAS_AUTHORIZE_URL:https://server.example.com/saaslogin1/oauth2/agent/authorize}
+    token-url: ${IDAAS_TOKEN_URL:https://authorizationserver.com/saaslogin1/oauth2/agent/token}
+    userinfo-url: ${IDAAS_USERINFO_URL:https://server.example.com/saaslogin1/oauth2/agent/userinfo}
+    client-id: ${IDAAS_CLIENT_ID:agent_gateway_client}
+    client-secret: ${IDAAS_CLIENT_SECRET:mock-client-secret}

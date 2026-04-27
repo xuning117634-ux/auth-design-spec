@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
-import com.huawei.it.roma.liveeda.auth.config.IamProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.domain.UserAuthorizationResult;
@@ -45,10 +44,10 @@ class JwtTokenFactoryTest {
                         new AgentRegistryEntry(
                                 "agt_business_001",
                                 "业务数据助手",
+                                "ent_001",
                                 "com.huawei.business.agent",
-                                "svc_ai_business_agent",
                                 List.of("localhost"),
-                                "ACTIVE"
+                                Set.of("erp:contract:r")
                         ),
                         new UserAuthorizationResult(
                                 "z01062668",
@@ -76,15 +75,7 @@ class JwtTokenFactoryTest {
         gatewayProperties.setDefaultUserId("z01062668");
         gatewayProperties.setDefaultUsername("demo.user");
 
-        IamProperties iamProperties = new IamProperties();
-        iamProperties.setBaseUrl("http://localhost:18080/mock/iam");
-        iamProperties.setProxyProjectId("proxy_project_001");
-        iamProperties.setAuthorizationHeader("Bearer mock-gateway-iam-authorization");
-        iamProperties.setDelegatorAccountName("svc_ai_business_agent");
-        iamProperties.setDelegatorAppid("com.huawei.business.agent");
-        iamProperties.setAgentId("agt_business_001");
-
         Clock fixedClock = Clock.fixed(Instant.parse("2026-04-21T10:00:00Z"), ZoneOffset.UTC);
-        return new JwtTokenFactory(gatewayProperties, iamProperties, fixedClock, new IdGenerator());
+        return new JwtTokenFactory(gatewayProperties, fixedClock, new IdGenerator());
     }
 }

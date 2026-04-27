@@ -82,10 +82,7 @@ public class MockIdaasController {
         String code = idGenerator.next("code");
         Set<String> scopes = "base".equals(flow)
                 ? Set.of()
-                : Arrays.stream(scope.split(","))
-                        .map(String::trim)
-                        .filter(value -> !value.isEmpty())
-                        .collect(Collectors.toSet());
+                : parseScope(scope);
         mockIdaasGrantStore.save(code, new MockIdaasGrantStore.MockIdaasGrant(
                 flow,
                 resolvedUserId,
@@ -180,10 +177,7 @@ public class MockIdaasController {
     }
 
     private String renderConsentPage(String redirectUri, String scope, String state, String mockIdaasSession) {
-        Set<String> permissionPointCodes = Arrays.stream(scope.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .collect(Collectors.toSet());
+        Set<String> permissionPointCodes = parseScope(scope);
         String scopeItems = policyCenterClient.resolveByCodes(permissionPointCodes).stream()
                 .sorted(Comparator.comparing(AuthorizedPermissionPoint::code))
                 .map(point -> """
@@ -257,6 +251,16 @@ public class MockIdaasController {
 
     private boolean isApproved(String approved) {
         return "true".equalsIgnoreCase(approved) || "on".equalsIgnoreCase(approved);
+    }
+
+    private Set<String> parseScope(String scope) {
+        if (scope == null || scope.isBlank()) {
+            return Set.of();
+        }
+        return Arrays.stream(scope.trim().split("\\s+"))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .collect(Collectors.toSet());
     }
 
     private String trimToDefault(String value, String defaultValue) {

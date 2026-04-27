@@ -7,15 +7,9 @@ import org.springframework.validation.annotation.Validated;
 
 @Data
 @Validated
-@ConfigurationProperties(prefix = "providers.iam")
-public class IamProperties {
+@ConfigurationProperties(prefix = "clients.agent-management")
+public class AgentManagementClientProperties {
 
     @NotBlank
     private String baseUrl;
-
-    @NotBlank
-    private String proxyProjectId;
-
-    @NotBlank
-    private String authorizationHeader;
 }

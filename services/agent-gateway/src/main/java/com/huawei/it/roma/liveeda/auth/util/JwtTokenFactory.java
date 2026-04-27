@@ -3,7 +3,6 @@ package com.huawei.it.roma.liveeda.auth.util;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
-import com.huawei.it.roma.liveeda.auth.config.IamProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.domain.IssuedToken;
@@ -26,7 +25,6 @@ public class JwtTokenFactory {
     private static final String MOCK_ACCESS_DOMAIN = "middle-secret";
 
     private final AgentGatewayProperties properties;
-    private final IamProperties iamProperties;
     private final Clock clock;
     private final IdGenerator idGenerator;
 
@@ -58,20 +56,22 @@ public class JwtTokenFactory {
         Instant now = clock.instant();
         Instant expiresAt = now.plus(1, ChronoUnit.DAYS);
         String tokenId = idGenerator.next("t1");
+        String delegatorAppId = agentRegistryEntry.appId();
+        String delegatorAccountName = "Agent_" + delegatorAppId;
 
         String token = JWT.create()
                 .withIssuer("iam")
-                .withSubject(iamProperties.getDelegatorAppid())
+                .withSubject(delegatorAppId)
                 .withIssuedAt(now)
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt)
                 .withJWTId(tokenId)
                 .withClaim("token_id", tokenId)
-                .withClaim("name", iamProperties.getDelegatorAccountName())
-                .withClaim("account_id", "mock-account-" + iamProperties.getDelegatorAccountName())
+                .withClaim("name", delegatorAccountName)
+                .withClaim("account_id", "mock-account-" + delegatorAccountName)
                 .withClaim("enterprise", MOCK_ENTERPRISE_ID)
                 .withClaim("account_type", MOCK_ACCOUNT_TYPE)
-                .withClaim("project", iamProperties.getDelegatorAppid())
+                .withClaim("project", delegatorAppId)
                 .withClaim("access_domain", MOCK_ACCESS_DOMAIN)
                 .withClaim("proxy_id", agentRegistryEntry.appId())
                 .withClaim("agent", buildAgentClaim(agentRegistryEntry))
@@ -83,6 +83,8 @@ public class JwtTokenFactory {
         Instant now = clock.instant();
         Instant expiresAt = now.plus(1, ChronoUnit.HOURS);
         String tokenId = idGenerator.next("tr");
+        String delegatorAppId = agentRegistryEntry.appId();
+        String delegatorAccountName = "Agent_" + delegatorAppId;
 
         Map<String, Object> agencyUserClaim = new LinkedHashMap<>();
         agencyUserClaim.put("idp", "idaas");
@@ -95,17 +97,17 @@ public class JwtTokenFactory {
 
         String token = JWT.create()
                 .withIssuer("iam")
-                .withSubject(iamProperties.getDelegatorAppid())
+                .withSubject(delegatorAppId)
                 .withIssuedAt(now)
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt)
                 .withJWTId(tokenId)
                 .withClaim("token_id", tokenId)
-                .withClaim("name", iamProperties.getDelegatorAccountName())
-                .withClaim("account_id", "mock-account-" + iamProperties.getDelegatorAccountName())
+                .withClaim("name", delegatorAccountName)
+                .withClaim("account_id", "mock-account-" + delegatorAccountName)
                 .withClaim("enterprise", MOCK_ENTERPRISE_ID)
                 .withClaim("account_type", MOCK_ACCOUNT_TYPE)
-                .withClaim("project", iamProperties.getDelegatorAppid())
+                .withClaim("project", delegatorAppId)
                 .withClaim("access_domain", MOCK_ACCESS_DOMAIN)
                 .withClaim("agent", buildAgentClaim(agentRegistryEntry))
                 .withClaim("agency_user", agencyUserClaim)

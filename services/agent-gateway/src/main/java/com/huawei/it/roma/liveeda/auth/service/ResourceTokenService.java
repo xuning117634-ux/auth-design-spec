@@ -1,11 +1,11 @@
 package com.huawei.it.roma.liveeda.auth.service;
 
+import com.huawei.it.roma.liveeda.auth.client.AgentManagementClient;
 import com.huawei.it.roma.liveeda.auth.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.auth.client.PolicyResolutionResult;
 import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.PendingAuthTransaction;
-import com.huawei.it.roma.liveeda.auth.store.AgentRegistryStore;
 import com.huawei.it.roma.liveeda.auth.store.PendingAuthTransactionStore;
 import com.huawei.it.roma.liveeda.auth.util.IdGenerator;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
@@ -23,7 +23,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequiredArgsConstructor
 public class ResourceTokenService {
 
-    private final AgentRegistryStore agentRegistryStore;
+    private final AgentManagementClient agentManagementClient;
     private final PolicyCenterClient policyCenterClient;
     private final PendingAuthTransactionStore pendingAuthTransactionStore;
     private final ReturnUrlValidator returnUrlValidator;
@@ -31,14 +31,12 @@ public class ResourceTokenService {
     private final IdGenerator idGenerator;
 
     public ResourceTokenResponse issueResourceToken(ResourceTokenRequest request) {
-        AgentRegistryEntry agentRegistryEntry = agentRegistryStore.require(request.agentId());
-        if (!agentRegistryEntry.isActive()) {
-            throw new GatewayException(HttpStatus.FORBIDDEN, "Agent is not active");
-        }
+        AgentRegistryEntry agentRegistryEntry = agentManagementClient.getGatewayProfile(request.agentId());
         URI validatedReturnUrl = returnUrlValidator.validate(agentRegistryEntry, request.returnUrl());
 
         Set<String> requiredTools = sanitizeTools(request.requiredTools());
         PolicyResolutionResult policyResolutionResult = policyCenterClient.resolveByTools(requiredTools);
+        ensureSubscribedPermissionPoints(agentRegistryEntry, policyResolutionResult.requiredPermissionPointCodes());
 
         String requestId = idGenerator.next("req");
         pendingAuthTransactionStore.save(new PendingAuthTransaction(
@@ -60,6 +58,18 @@ public class ResourceTokenService {
                 .toUriString();
 
         return ResourceTokenResponse.redirect(redirectUrl, requestId);
+    }
+
+    private void ensureSubscribedPermissionPoints(
+            AgentRegistryEntry agentRegistryEntry,
+            Set<String> requiredPermissionPointCodes
+    ) {
+        if (!agentRegistryEntry.hasSubscribedAll(requiredPermissionPointCodes)) {
+            throw new GatewayException(
+                    HttpStatus.FORBIDDEN,
+                    "Agent has not subscribed all required permission points"
+            );
+        }
     }
 
     private Set<String> sanitizeTools(Iterable<String> values) {

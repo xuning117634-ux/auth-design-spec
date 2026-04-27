@@ -194,6 +194,29 @@ class AgentGatewayFlowTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void shouldRejectResourceTokenWhenPermissionPointIsNotSubscribed() throws Exception {
+        when(policyCenterClient.resolveByTools(anySet()))
+                .thenReturn(new PolicyResolutionResult(
+                        Set.of("erp:invoice:r"),
+                        List.of(new AuthorizedPermissionPoint("erp:invoice:r", "ERP 发票的可读权限"))
+                ));
+
+        ResourceTokenRequest resourceTokenRequest = new ResourceTokenRequest(
+                "agt_contract_only_001",
+                List.of("mcp:invoice-server/query_invoices"),
+                "http://localhost:18082/agent.html",
+                "outer_chat_state",
+                null
+        );
+
+        mockMvc.perform(post("/gw/token/resource-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(resourceTokenRequest)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Agent has not subscribed all required permission points"));
+    }
+
     private Map<String, String> queryParams(URI uri) {
         return UriComponentsBuilder.fromUri(uri)
                 .build()

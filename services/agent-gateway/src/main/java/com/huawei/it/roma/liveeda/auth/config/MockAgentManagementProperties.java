@@ -4,15 +4,17 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 @Data
 @Validated
-@ConfigurationProperties(prefix = "agent-registry")
-public class AgentRegistryProperties {
+@ConfigurationProperties(prefix = "mock-agent-management")
+public class MockAgentManagementProperties {
 
     @Valid
     @NotEmpty
@@ -27,15 +29,14 @@ public class AgentRegistryProperties {
         private String agentName;
 
         @NotBlank
+        private String enterprise;
+
+        @NotBlank
         private String appId;
-
-        @NotBlank
-        private String agentServiceAccount;
-
-        @NotBlank
-        private String status;
 
         @NotEmpty
         private List<String> allowedReturnHosts = new ArrayList<>();
+
+        private Set<String> subscribedPermissionPointCodes = new LinkedHashSet<>();
     }
 }

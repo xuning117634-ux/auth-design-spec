@@ -26,9 +26,9 @@ public class MockIdaasAuthorizeSupport implements IdaasAuthorizeSupport {
                 .queryParam("client_id", idaaSProperties.getClientId())
                 .queryParam("agent_id", agentId)
                 .queryParam("redirect_uri", properties.getSelfBaseUrl() + "/gw/auth/base/callback")
-                .queryParam("scope", "base")
+                .queryParam("scope", "base.profile")
                 .queryParam("state", gwState)
-                .build(true)
+                .build()
                 .toUri();
     }
 
@@ -45,13 +45,13 @@ public class MockIdaasAuthorizeSupport implements IdaasAuthorizeSupport {
                 .queryParam("client_id", idaaSProperties.getClientId())
                 .queryParam("agent_id", agentId)
                 .queryParam("redirect_uri", properties.getSelfBaseUrl() + "/gw/auth/consent/callback")
-                .queryParam("scope", String.join(",", requiredPermissionPointCodes.stream().sorted().toList()))
+                .queryParam("scope", String.join(" ", requiredPermissionPointCodes.stream().sorted().toList()))
                 .queryParam("state", gwState);
         String loginHint = resolveLoginHint(subjectHint);
         if (loginHint != null) {
             builder.queryParam("login_hint", loginHint);
         }
-        return builder.build(true).toUri();
+        return builder.build().toUri();
     }
 
     private String resolveLoginHint(Map<String, String> subjectHint) {

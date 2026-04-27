@@ -19,7 +19,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -50,14 +53,17 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                 .retrieve()
                 .body(UserInfoResponse.class);
-        if (response == null || response.userId() == null || response.userId().isBlank()) {
-            throw new GatewayException(HttpStatus.BAD_GATEWAY, "IDaaS userinfo endpoint returned empty user_id");
+        if (response == null || response.uid() == null || response.uid().isBlank()) {
+            throw new GatewayException(HttpStatus.BAD_GATEWAY, "IDaaS userinfo endpoint returned empty uid");
         }
-        String uuid = response.uuid() == null || response.uuid().isBlank() ? response.userId() : response.uuid();
-        String username = response.username() == null || response.username().isBlank()
-                ? response.userId()
-                : response.username();
-        return new BaseLoginResult(response.userId(), uuid, username);
+        String uuid = firstNonBlank(response.uuid(), response.uid());
+        String username = firstNonBlank(
+                response.displayNameCn(),
+                response.displayName(),
+                response.displayNameEn(),
+                response.uid()
+        );
+        return new BaseLoginResult(response.uid(), uuid, username);
     }
 
     @Override
@@ -89,10 +95,13 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
             return permissionPoints;
         }
         for (Map<?, ?> claim : claims) {
-            String code = claim == null ? null : String.valueOf(claim.get("code"));
-            String displayNameZh = claim == null ? null : String.valueOf(claim.get("displayNameZh"));
+            String code = claim == null ? null : stringValue(claim.get("code"));
+            String displayNameZh = claim == null ? null : stringValue(claim.get("displayNameZh"));
             if (code != null && !code.isBlank()) {
-                permissionPoints.add(new AuthorizedPermissionPoint(code, displayNameZh == null ? code : displayNameZh));
+                permissionPoints.add(new AuthorizedPermissionPoint(
+                        code,
+                        displayNameZh == null || displayNameZh.isBlank() ? code : displayNameZh
+                ));
             }
         }
         return permissionPoints;
@@ -114,14 +123,16 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
 
     private TokenResponse exchangeToken(String code, String redirectUri) {
         RestClient restClient = restClientBuilder.baseUrl(idaaSProperties.getTokenUrl()).build();
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "authorization_code");
+        form.add("client_id", idaaSProperties.getClientId());
+        form.add("client_secret", idaaSProperties.getClientSecret());
+        form.add("code", code);
+        form.add("redirect_uri", redirectUri);
+
         TokenResponse response = restClient.post()
-                .body(new TokenRequest(
-                        "authorization_code",
-                        code,
-                        idaaSProperties.getClientId(),
-                        idaaSProperties.getClientSecret(),
-                        redirectUri
-                ))
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(form)
                 .retrieve()
                 .body(TokenResponse.class);
         if (response == null || response.accessToken() == null || response.accessToken().isBlank()) {
@@ -130,43 +141,34 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
         return response;
     }
 
-    private record TokenRequest(String grantType, String code, String clientId, String clientSecret, String redirectUri) {
-        @Override
-        @JsonProperty("grant_type")
-        public String grantType() {
-            return grantType;
-        }
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
 
-        @Override
-        @JsonProperty("client_id")
-        public String clientId() {
-            return clientId;
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
         }
-
-        @Override
-        @JsonProperty("client_secret")
-        public String clientSecret() {
-            return clientSecret;
-        }
-
-        @Override
-        @JsonProperty("redirect_uri")
-        public String redirectUri() {
-            return redirectUri;
-        }
+        return null;
     }
 
     private record TokenResponse(
             @JsonProperty("access_token") String accessToken,
+            @JsonProperty("token_type") String tokenType,
             @JsonProperty("expires_at") Instant expiresAt,
-            @JsonProperty("expires_in") Long expiresIn
+            @JsonProperty("expires_in") Long expiresIn,
+            @JsonProperty("refresh_token") String refreshToken
     ) {
     }
 
     private record UserInfoResponse(
-            @JsonProperty("user_id") String userId,
+            String uid,
             String uuid,
-            String username
+            String displayNameCn,
+            String displayName,
+            String displayNameEn
     ) {
     }
 }

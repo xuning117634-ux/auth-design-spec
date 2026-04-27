@@ -23,6 +23,8 @@ gateway:
 clients:
   policy-center:
     base-url: http://localhost:18081
+  agent-management:
+    base-url: http://localhost:${server.port}/mock/agent-management
 
 providers:
   idaas:
@@ -35,17 +37,26 @@ providers:
     base-url: http://localhost:${server.port}/mock/iam
     proxy-project-id: proxy_project_001
     authorization-header: Bearer mock-gateway-iam-authorization
-    delegator-account-name: svc_ai_business_agent
-    delegator-appid: com.huawei.business.agent
-    agent-id: agt_business_001
 
-agent-registry:
+mock-agent-management:
   entries:
     - agent-id: agt_business_001
       agent-name: business-data-assistant
+      enterprise: ent_001
       app-id: com.huawei.business.agent
-      agent-service-account: svc_ai_business_agent
       allowed-return-hosts:
         - localhost
         - 127.0.0.1
-      status: ACTIVE
+      subscribed-permission-point-codes:
+        - erp:contract:r
+        - erp:invoice:r
+        - erp:report:r
+    - agent-id: agt_contract_only_001
+      agent-name: contract-only-assistant
+      enterprise: ent_001
+      app-id: com.huawei.contract.agent
+      allowed-return-hosts:
+        - localhost
+        - 127.0.0.1
+      subscribed-permission-point-codes:
+        - erp:contract:r
