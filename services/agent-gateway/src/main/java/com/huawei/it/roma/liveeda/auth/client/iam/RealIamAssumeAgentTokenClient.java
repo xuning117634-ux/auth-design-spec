@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -20,23 +21,24 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
 
     private final RestClient.Builder restClientBuilder;
     private final IamProperties iamProperties;
+    private final IamGatewayTokenClient iamGatewayTokenClient;
 
     @Override
     public IssuedToken assumeAgentToken(AgentRegistryEntry agentRegistryEntry) {
         RestClient restClient = restClientBuilder.baseUrl(iamProperties.getBaseUrl()).build();
+        IssuedToken gatewayAgentToken = iamGatewayTokenClient.getGatewayAgentToken();
         String delegatorAppId = agentRegistryEntry.appId();
         String delegatorAccountName = "Agent_" + delegatorAppId;
         TokenResponse response = restClient.post()
-                .uri("/iam/projects/{proxyProjectId}/assume_agent_token", iamProperties.getProxyProjectId())
-                // TODO: switch this placeholder header to the IAM SDK result after the real delegation flow is wired in.
-                .header(HttpHeaders.AUTHORIZATION, iamProperties.getAuthorizationHeader())
+                .uri(iamProperties.getAssumeAgentTokenPath(), iamProperties.getGatewayProject())
+                .header(HttpHeaders.AUTHORIZATION, gatewayAgentToken.accessToken())
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(new AssumeAgentTokenRequest(
                         new AssumeAgentTokenData(
                                 "assume_agent_token",
                                 new AssumeAgentTokenAttributes(
                                         delegatorAccountName,
-                                        delegatorAppId,
-                                        agentRegistryEntry.agentId()
+                                        delegatorAppId
                                 )
                         )
                 ))
@@ -58,7 +60,7 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
     private record AssumeAgentTokenData(String type, AssumeAgentTokenAttributes attributes) {
     }
 
-    private record AssumeAgentTokenAttributes(String delegatorAccountName, String delegatorAppid, String agentId) {
+    private record AssumeAgentTokenAttributes(String delegatorAccountName, String delegatorAppid) {
         @Override
         @JsonProperty("delegator_account_name")
         public String delegatorAccountName() {
@@ -69,12 +71,6 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
         @JsonProperty("delegator_appid")
         public String delegatorAppid() {
             return delegatorAppid;
-        }
-
-        @Override
-        @JsonProperty("agent_id")
-        public String agentId() {
-            return agentId;
         }
     }
 

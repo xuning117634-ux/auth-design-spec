@@ -14,8 +14,25 @@ public class IamProperties {
     private String baseUrl;
 
     @NotBlank
-    private String proxyProjectId;
+    private String agentTokenPath = "/iam/auth/agent-token";
 
     @NotBlank
-    private String authorizationHeader;
+    private String assumeAgentTokenPath = "/iam/projects/{gatewayProject}/assume-agent-token";
+
+    @NotBlank
+    private String resourceTokenPath = "/iam/auth/resource-token";
+
+    @NotBlank
+    private String gatewayAccount;
+
+    @NotBlank
+    private String gatewaySecret;
+
+    @NotBlank
+    private String gatewayProject;
+
+    @NotBlank
+    private String gatewayEnterprise;
+
+    private long gatewayTokenRefreshSkewSeconds = 300;
 }

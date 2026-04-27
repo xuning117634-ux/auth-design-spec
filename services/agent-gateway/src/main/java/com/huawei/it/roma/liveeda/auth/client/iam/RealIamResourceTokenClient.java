@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -30,8 +31,9 @@ public class RealIamResourceTokenClient implements IamResourceTokenClient {
     ) {
         RestClient restClient = restClientBuilder.baseUrl(iamProperties.getBaseUrl()).build();
         TokenResponse response = restClient.post()
-                .uri("/iam/auth/resource-token")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + agentToken.accessToken())
+                .uri(iamProperties.getResourceTokenPath())
+                .header(HttpHeaders.AUTHORIZATION, agentToken.accessToken())
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(new ResourceTokenRequest(new ResourceTokenData(
                         "resource_token",
                         new ResourceTokenAttributes(userAuthorizationResult.accessToken())

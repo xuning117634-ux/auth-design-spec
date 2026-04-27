@@ -5,3 +5,13 @@ providers:
     userinfo-url: ${IDAAS_USERINFO_URL:https://server.example.com/saaslogin1/oauth2/agent/userinfo}
     client-id: ${IDAAS_CLIENT_ID:agent_gateway_client}
     client-secret: ${IDAAS_CLIENT_SECRET:mock-client-secret}
+  iam:
+    base-url: ${IAM_BASE_URL:https://iam-blue.his.huawei.com}
+    agent-token-path: ${IAM_AGENT_TOKEN_PATH:/iam/auth/agent-token}
+    assume-agent-token-path: ${IAM_ASSUME_AGENT_TOKEN_PATH:/iam/projects/{gatewayProject}/assume-agent-token}
+    resource-token-path: ${IAM_RESOURCE_TOKEN_PATH:/iam/auth/resource-token}
+    gateway-account: ${IAM_GATEWAY_ACCOUNT:mock-gateway-ai-account}
+    gateway-secret: ${IAM_GATEWAY_SECRET:mock-gateway-ai-secret}
+    gateway-project: ${IAM_GATEWAY_PROJECT:com.huawei.gateway}
+    gateway-enterprise: ${IAM_GATEWAY_ENTERPRISE:ent_001}
+    gateway-token-refresh-skew-seconds: ${IAM_GATEWAY_TOKEN_REFRESH_SKEW_SECONDS:300}

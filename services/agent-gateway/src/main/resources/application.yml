@@ -35,8 +35,14 @@ providers:
     client-secret: mock-client-secret
   iam:
     base-url: http://localhost:${server.port}/mock/iam
-    proxy-project-id: proxy_project_001
-    authorization-header: Bearer mock-gateway-iam-authorization
+    agent-token-path: /iam/auth/agent-token
+    assume-agent-token-path: /iam/projects/{gatewayProject}/assume-agent-token
+    resource-token-path: /iam/auth/resource-token
+    gateway-account: mock-gateway-ai-account
+    gateway-secret: mock-gateway-ai-secret
+    gateway-project: proxy_project_001
+    gateway-enterprise: ent_001
+    gateway-token-refresh-skew-seconds: 300
 
 mock-agent-management:
   entries:
