@@ -2,7 +2,7 @@ package com.huawei.it.roma.liveeda.auth.util;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
-import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.config.MockTokenProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.domain.IssuedToken;
@@ -14,9 +14,11 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
+@Profile("mock")
 @RequiredArgsConstructor
 public class JwtTokenFactory {
 
@@ -24,7 +26,7 @@ public class JwtTokenFactory {
     private static final String MOCK_ACCOUNT_TYPE = "IAM_AI_SERVICE";
     private static final String MOCK_ACCESS_DOMAIN = "middle-secret";
 
-    private final AgentGatewayProperties properties;
+    private final MockTokenProperties properties;
     private final Clock clock;
     private final IdGenerator idGenerator;
 

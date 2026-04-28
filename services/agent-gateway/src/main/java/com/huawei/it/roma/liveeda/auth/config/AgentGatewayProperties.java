@@ -16,9 +16,6 @@ public class AgentGatewayProperties {
     private boolean secureCookies;
 
     @NotBlank
-    private String jwtSecret;
-
-    @NotBlank
     private String defaultUserId;
 
     @NotBlank

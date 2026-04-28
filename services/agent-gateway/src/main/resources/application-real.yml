@@ -1,17 +1,34 @@
+gateway:
+  self-base-url: ${GATEWAY_SELF_BASE_URL:http://localhost:18080}
+  secure-cookies: false
+
 providers:
   idaas:
-    authorize-url: ${IDAAS_AUTHORIZE_URL:https://server.example.com/saaslogin1/oauth2/agent/authorize}
-    token-url: ${IDAAS_TOKEN_URL:https://authorizationserver.com/saaslogin1/oauth2/agent/token}
-    userinfo-url: ${IDAAS_USERINFO_URL:https://server.example.com/saaslogin1/oauth2/agent/userinfo}
-    client-id: ${IDAAS_CLIENT_ID:agent_gateway_client}
-    client-secret: ${IDAAS_CLIENT_SECRET:mock-client-secret}
+    authorize-url: https://uniportal-dev.huawei.com/saaslogin1/oauth2/agent/authorize
+    token-url: https://uniportal-dev.huawei.com/saaslogin1/oauth2/agent/token
+    userinfo-url: https://uniportal-dev.huawei.com/saaslogin1/oauth2/agent/userinfo
+    client-id: Agent_33b71f66573c4f5bac20112c3f628442
+    client-secret: ${IDAAS_CLIENT_SECRET:}
   iam:
-    base-url: ${IAM_BASE_URL:https://iam-blue.his.huawei.com}
-    agent-token-path: ${IAM_AGENT_TOKEN_PATH:/iam/auth/agent-token}
-    assume-agent-token-path: ${IAM_ASSUME_AGENT_TOKEN_PATH:/iam/projects/{gatewayProject}/assume-agent-token}
-    resource-token-path: ${IAM_RESOURCE_TOKEN_PATH:/iam/auth/resource-token}
-    gateway-account: ${IAM_GATEWAY_ACCOUNT:mock-gateway-ai-account}
-    gateway-secret: ${IAM_GATEWAY_SECRET:mock-gateway-ai-secret}
-    gateway-project: ${IAM_GATEWAY_PROJECT:com.huawei.gateway}
-    gateway-enterprise: ${IAM_GATEWAY_ENTERPRISE:ent_001}
-    gateway-token-refresh-skew-seconds: ${IAM_GATEWAY_TOKEN_REFRESH_SKEW_SECONDS:300}
+    base-url: https://apig.hissit.huawei.com
+    agent-token-path: /iam/auth/agent-token
+    assume-agent-token-path: /iam/projects/{gatewayProject}/assume-agent-token
+    resource-token-path: /iam/auth/resource-token
+    gateway-account: Agent_33b71f66573c4f5bac20112c3f628442
+    gateway-secret: ${IAM_GATEWAY_SECRET:}
+    gateway-project: com.huawei.pass.roma.event
+    gateway-enterprise: 11111111111111111111111111111111
+    gateway-token-refresh-skew-seconds: 300
+
+clients:
+  policy-center:
+    base-url: https://apig-beta.his.huawei.com/api/dev/policy-center
+    headers:
+      X-HW-ID: com.huawei.pass.roma.event
+      X-HW-APPKEY: ${POLICY_CENTER_X_HW_APPKEY:${APIG_X_HW_APPKEY:}}
+  agent-management:
+    base-url: https://apig-beta.his.huawei.com/api/dev
+    query-by-agent-id-path: /public/agentMall/queryByAgentId
+    headers:
+      X-HW-ID: com.huawei.pass.roma.event
+      X-HW-APPKEY: ${AGENT_MANAGEMENT_X_HW_APPKEY:${APIG_X_HW_APPKEY:}}

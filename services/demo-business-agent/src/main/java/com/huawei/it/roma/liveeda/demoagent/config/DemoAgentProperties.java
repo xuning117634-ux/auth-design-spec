@@ -1,6 +1,8 @@
 package com.huawei.it.roma.liveeda.demoagent.config;
 
 import jakarta.validation.constraints.NotBlank;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -15,6 +17,8 @@ public class DemoAgentProperties {
 
     @NotBlank
     private String policyCenterBaseUrl;
+
+    private Map<String, String> policyCenterHeaders = new LinkedHashMap<>();
 
     @NotBlank
     private String selfBaseUrl;

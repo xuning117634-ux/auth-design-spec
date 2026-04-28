@@ -3,8 +3,10 @@ package com.huawei.it.roma.liveeda.demoagent.client;
 import com.huawei.it.roma.liveeda.demoagent.config.DemoAgentProperties;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClient.RequestBodySpec;
 
 @Component
 public class PolicyCenterClient {
@@ -19,8 +21,7 @@ public class PolicyCenterClient {
 
     public ResolveByToolsResult resolveByTools(Collection<String> requiredTools) {
         RestClient restClient = restClientBuilder.baseUrl(properties.getPolicyCenterBaseUrl()).build();
-        return restClient.post()
-                .uri("/internal/v1/permission-points/resolve-by-tools")
+        return post(restClient, "/internal/v1/permission-points/resolve-by-tools")
                 .body(new ResolveByToolsRequest(requiredTools.stream().sorted().toList()))
                 .retrieve()
                 .body(ResolveByToolsResult.class);
@@ -28,8 +29,7 @@ public class PolicyCenterClient {
 
     public ResolveByCodesResult resolveByCodes(Collection<String> permissionPointCodes) {
         RestClient restClient = restClientBuilder.baseUrl(properties.getPolicyCenterBaseUrl()).build();
-        return restClient.post()
-                .uri("/internal/v1/permission-points/resolve-by-codes")
+        return post(restClient, "/internal/v1/permission-points/resolve-by-codes")
                 .body(new ResolveByCodesRequest(permissionPointCodes.stream().sorted().toList()))
                 .retrieve()
                 .body(ResolveByCodesResult.class);
@@ -37,11 +37,24 @@ public class PolicyCenterClient {
 
     public QueryAgentStrategiesResult queryAgentStrategies(String agentId, Collection<String> permissionPointCodes) {
         RestClient restClient = restClientBuilder.baseUrl(properties.getPolicyCenterBaseUrl()).build();
-        return restClient.post()
-                .uri("/internal/v1/agent-strategies/query")
+        return post(restClient, "/internal/v1/agent-strategies/query")
                 .body(new QueryAgentStrategiesRequest(agentId, permissionPointCodes.stream().sorted().toList()))
                 .retrieve()
                 .body(QueryAgentStrategiesResult.class);
+    }
+
+    private RequestBodySpec post(RestClient restClient, String uri) {
+        RequestBodySpec request = restClient.post().uri(uri);
+        for (Map.Entry<String, String> entry : properties.getPolicyCenterHeaders().entrySet()) {
+            if (!isBlank(entry.getKey()) && !isBlank(entry.getValue())) {
+                request.header(entry.getKey(), entry.getValue());
+            }
+        }
+        return request;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private record ResolveByToolsRequest(List<String> requiredTools) {

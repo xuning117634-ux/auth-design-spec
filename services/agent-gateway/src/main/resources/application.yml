@@ -16,9 +16,11 @@ management:
 gateway:
   self-base-url: http://localhost:${server.port}
   secure-cookies: false
-  jwt-secret: changeit-changeit-changeit
   default-user-id: z01062668
   default-username: demo.user
+
+mock-token:
+  jwt-secret: changeit-changeit-changeit
 
 clients:
   policy-center:

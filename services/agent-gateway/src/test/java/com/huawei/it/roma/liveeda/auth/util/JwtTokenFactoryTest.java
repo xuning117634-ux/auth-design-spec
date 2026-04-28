@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
-import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.config.MockTokenProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.domain.UserAuthorizationResult;
@@ -69,13 +69,10 @@ class JwtTokenFactoryTest {
     }
 
     private JwtTokenFactory buildFactory() {
-        AgentGatewayProperties gatewayProperties = new AgentGatewayProperties();
-        gatewayProperties.setJwtSecret("changeit-changeit-changeit");
-        gatewayProperties.setSelfBaseUrl("http://localhost:18080");
-        gatewayProperties.setDefaultUserId("z01062668");
-        gatewayProperties.setDefaultUsername("demo.user");
+        MockTokenProperties mockTokenProperties = new MockTokenProperties();
+        mockTokenProperties.setJwtSecret("changeit-changeit-changeit");
 
         Clock fixedClock = Clock.fixed(Instant.parse("2026-04-21T10:00:00Z"), ZoneOffset.UTC);
-        return new JwtTokenFactory(gatewayProperties, fixedClock, new IdGenerator());
+        return new JwtTokenFactory(mockTokenProperties, fixedClock, new IdGenerator());
     }
 }

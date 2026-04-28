@@ -1,0 +1,6 @@
+demo-agent:
+  policy-center-base-url: https://apig-beta.his.huawei.com/api/dev/policy-center
+  policy-center-headers:
+    X-HW-ID: com.huawei.pass.roma.event
+    X-HW-APPKEY: ${POLICY_CENTER_X_HW_APPKEY:${APIG_X_HW_APPKEY:}}
+  agent-id: 2d513fbfee9b4cfe96722060bc7f1b9d

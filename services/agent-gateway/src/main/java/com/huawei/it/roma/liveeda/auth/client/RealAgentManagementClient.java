@@ -6,11 +6,14 @@ import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient.RequestHeadersSpec;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -24,37 +27,51 @@ public class RealAgentManagementClient implements AgentManagementClient {
     @Override
     public AgentRegistryEntry getGatewayProfile(String agentId) {
         RestClient restClient = restClientBuilder.baseUrl(properties.getBaseUrl()).build();
-        GatewayProfileResponse response = restClient.get()
-                .uri("/internal/v1/agents/{agentId}/gateway-profile", agentId)
+        RequestHeadersSpec<?> request = restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path(properties.getQueryByAgentIdPath())
+                        .queryParam("agentId", agentId)
+                        .build());
+        applyConfiguredHeaders(request);
+        AgentMallResponse response = request
                 .retrieve()
-                .body(GatewayProfileResponse.class);
-        if (response == null) {
+                .body(AgentMallResponse.class);
+        if (response == null || !"0000".equals(response.status()) || response.data() == null) {
             throw new GatewayException(HttpStatus.BAD_GATEWAY, "Agent management returned empty response");
         }
-        validate(response, agentId);
+        AgentMallData data = response.data();
+        validate(data, agentId);
         return new AgentRegistryEntry(
-                response.agentId(),
-                response.agentName(),
-                response.enterprise(),
-                response.appId(),
-                response.allowedReturnHosts(),
-                new LinkedHashSet<>(response.subscribedPermissionPointCodes())
+                data.uniqueId(),
+                data.name(),
+                data.enterpriseId(),
+                data.appId(),
+                data.allowedReturnHosts(),
+                new LinkedHashSet<>(data.subscriptionPermissionPoints())
         );
     }
 
-    private void validate(GatewayProfileResponse response, String expectedAgentId) {
-        if (!expectedAgentId.equals(response.agentId())) {
+    private void applyConfiguredHeaders(RequestHeadersSpec<?> request) {
+        for (Map.Entry<String, String> entry : properties.getHeaders().entrySet()) {
+            if (!isBlank(entry.getKey()) && !isBlank(entry.getValue())) {
+                request.header(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    private void validate(AgentMallData data, String expectedAgentId) {
+        if (!expectedAgentId.equals(data.uniqueId())) {
             throw new GatewayException(HttpStatus.BAD_GATEWAY, "Agent management returned mismatched agentId");
         }
-        if (isBlank(response.agentName()) || isBlank(response.enterprise()) || isBlank(response.appId())) {
+        if (isBlank(data.name()) || isBlank(data.enterpriseId()) || isBlank(data.appId())) {
             throw new GatewayException(HttpStatus.BAD_GATEWAY, "Agent management response is missing required fields");
         }
-        if (response.allowedReturnHosts() == null || response.allowedReturnHosts().isEmpty()) {
+        if (data.allowedReturnHosts() == null || data.allowedReturnHosts().isEmpty()) {
             throw new GatewayException(HttpStatus.BAD_GATEWAY, "Agent management response is missing allowedReturnHosts");
         }
-        if (response.subscribedPermissionPointCodes() == null) {
+        if (data.subscriptionPermissionPoints() == null) {
             throw new GatewayException(HttpStatus.BAD_GATEWAY,
-                    "Agent management response is missing subscribedPermissionPointCodes");
+                    "Agent management response is missing subscriptionPermissionPoints");
         }
     }
 
@@ -62,13 +79,20 @@ public class RealAgentManagementClient implements AgentManagementClient {
         return value == null || value.trim().isEmpty();
     }
 
-    private record GatewayProfileResponse(
-            @JsonProperty("agentId") String agentId,
-            @JsonProperty("agentName") String agentName,
-            @JsonProperty("enterprise") String enterprise,
+    private record AgentMallResponse(
+            String status,
+            String message,
+            AgentMallData data
+    ) {
+    }
+
+    private record AgentMallData(
+            @JsonProperty("uniqueId") String uniqueId,
+            @JsonProperty("name") String name,
+            @JsonProperty("enterpriseId") String enterpriseId,
             @JsonProperty("appId") String appId,
             @JsonProperty("allowedReturnHosts") List<String> allowedReturnHosts,
-            @JsonProperty("subscribedPermissionPointCodes") Set<String> subscribedPermissionPointCodes
+            @JsonProperty("subscriptionPermissionPoints") Set<String> subscriptionPermissionPoints
     ) {
     }
 }
