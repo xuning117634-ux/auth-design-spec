@@ -1,54 +1,653 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html class="dark" lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>业务 Agent 演示页面</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>业务 Agent 工作区</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
   <style>
-    body { font-family: "Microsoft YaHei", Arial, sans-serif; margin: 0; background: #f6f8fb; color: #1f2937; }
-    .shell { max-width: 920px; margin: 48px auto; background: white; border-radius: 16px; box-shadow: 0 12px 32px rgba(0,0,0,0.08); overflow: hidden; }
-    .header { background: linear-gradient(135deg, #145cff, #0ea5e9); color: white; padding: 24px 28px; }
-    .header-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-    .logout-btn { margin-top: 0; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); }
-    .logout-btn:hover { background: rgba(255,255,255,0.24); }
-    .content { padding: 24px 28px 32px; }
-    textarea { width: 100%; min-height: 120px; border: 1px solid #d1d5db; border-radius: 12px; padding: 14px; font-size: 14px; box-sizing: border-box; }
-    button { margin-top: 16px; border: none; background: #145cff; color: white; padding: 12px 18px; border-radius: 10px; cursor: pointer; font-size: 14px; }
-    .hint { color: #6b7280; font-size: 13px; margin-top: 12px; line-height: 1.6; }
-    .result { margin-top: 24px; border-radius: 12px; background: #f8fafc; border: 1px solid #e5e7eb; padding: 16px; white-space: pre-wrap; line-height: 1.7; }
+    :root {
+      --bg: #0d0e15;
+      --surface: #12131a;
+      --panel: #1a1b22;
+      --panel-high: #292931;
+      --line: #33343c;
+      --line-soft: #464554;
+      --text: #e3e1ec;
+      --muted: #9ca0b5;
+      --muted-strong: #c7c4d7;
+      --primary: #8083ff;
+      --primary-soft: rgba(128, 131, 255, 0.18);
+      --tertiary: #ffb783;
+      --success: #52e6a2;
+      --warning: #ffcf7a;
+      --error: #ff8a80;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 20% -10%, rgba(128, 131, 255, 0.18), transparent 34rem),
+        radial-gradient(circle at 90% 10%, rgba(255, 183, 131, 0.08), transparent 28rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, "Microsoft YaHei", "PingFang SC", sans-serif;
+      overflow: hidden;
+    }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+      line-height: 1;
+    }
+
+    .app-shell { display: flex; height: 100vh; min-height: 0; }
+    .sidebar {
+      width: 290px;
+      flex-shrink: 0;
+      border-right: 1px solid rgba(70, 69, 84, 0.65);
+      background: rgba(8, 9, 15, 0.88);
+      backdrop-filter: blur(18px);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, rgba(128, 131, 255, 0.30), rgba(255, 183, 131, 0.16));
+      border: 1px solid rgba(199, 196, 215, 0.22);
+      box-shadow: 0 0 36px rgba(128, 131, 255, 0.18);
+    }
+
+    .brand-title { font-size: 22px; font-weight: 700; letter-spacing: -0.04em; }
+    .brand-subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .nav-card {
+      border: 1px solid rgba(70, 69, 84, 0.72);
+      background: linear-gradient(180deg, rgba(41, 41, 49, 0.82), rgba(26, 27, 34, 0.82));
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .new-task {
+      width: 100%;
+      height: 46px;
+      border: 1px solid rgba(128, 131, 255, 0.42);
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(128, 131, 255, 0.20), rgba(41, 41, 49, 0.88));
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+    }
+    .new-task:hover { transform: translateY(-1px); border-color: rgba(192, 193, 255, 0.68); }
+
+    .nav-list { display: grid; gap: 8px; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: var(--muted-strong);
+      font-size: 14px;
+    }
+    .nav-item.active {
+      background: rgba(41, 41, 49, 0.88);
+      border: 1px solid rgba(70, 69, 84, 0.82);
+      color: #fff;
+    }
+    .nav-left { display: flex; align-items: center; gap: 10px; }
+    .count-pill {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: var(--muted-strong);
+      background: rgba(51, 52, 60, 0.85);
+      border: 1px solid rgba(70, 69, 84, 0.72);
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+
+    .side-section-title {
+      color: #777b8f;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 2px 0 10px;
+    }
+    .suggestion-list { display: grid; gap: 8px; }
+    .suggestion {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 9px 10px;
+      color: var(--muted-strong);
+      font-size: 13px;
+      line-height: 1.45;
+      cursor: pointer;
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+    }
+    .suggestion:hover {
+      color: var(--text);
+      background: rgba(41, 41, 49, 0.72);
+      border-color: rgba(70, 69, 84, 0.64);
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      border-top: 1px solid rgba(70, 69, 84, 0.58);
+      padding-top: 16px;
+      display: grid;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid rgba(70, 69, 84, 0.62);
+      background: rgba(18, 19, 26, 0.72);
+      border-radius: 12px;
+      padding: 10px;
+      min-width: 0;
+    }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      background: rgba(128, 131, 255, 0.16);
+      color: var(--primary);
+      border: 1px solid rgba(128, 131, 255, 0.32);
+      flex-shrink: 0;
+    }
+    .user-meta { min-width: 0; }
+    .user-name, .user-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .user-name { color: var(--text); font-size: 13px; font-weight: 600; }
+    .user-id { color: var(--muted); font-family: "JetBrains Mono", monospace; font-size: 11px; margin-top: 2px; }
+
+    .logout-btn {
+      width: 100%;
+      border: 1px solid rgba(70, 69, 84, 0.72);
+      color: var(--muted-strong);
+      background: transparent;
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+    .logout-btn:hover { color: #fff; background: rgba(41, 41, 49, 0.72); }
+
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .topbar {
+      height: 64px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      border-bottom: 1px solid rgba(70, 69, 84, 0.65);
+      background: rgba(13, 14, 21, 0.72);
+      backdrop-filter: blur(18px);
+    }
+    .top-title { font-weight: 700; letter-spacing: -0.02em; }
+    .top-subtitle { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .status-row { display: flex; align-items: center; gap: 10px; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid rgba(70, 69, 84, 0.78);
+      background: rgba(26, 27, 34, 0.82);
+      color: var(--muted-strong);
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 12px;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--success); box-shadow: 0 0 12px rgba(82, 230, 162, 0.65); }
+
+    .workspace {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 28px 32px 132px;
+    }
+    .stream {
+      width: min(100%, 1040px);
+      margin: 0 auto;
+      display: grid;
+      gap: 22px;
+    }
+    .hero {
+      border: 1px solid rgba(70, 69, 84, 0.72);
+      background:
+        linear-gradient(135deg, rgba(128, 131, 255, 0.12), rgba(255, 183, 131, 0.06)),
+        rgba(18, 19, 26, 0.76);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
+    }
+    .hero-label { color: var(--tertiary); font-size: 12px; font-family: "JetBrains Mono", monospace; }
+    .hero h1 { margin: 8px 0 8px; font-size: clamp(24px, 4vw, 36px); line-height: 1.12; letter-spacing: -0.04em; }
+    .hero p { color: var(--muted-strong); margin: 0; line-height: 1.7; max-width: 760px; }
+
+    .message-row { display: flex; gap: 14px; align-items: flex-start; }
+    .message-row.user { justify-content: flex-end; }
+    .bot-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      background: rgba(128, 131, 255, 0.18);
+      color: var(--primary);
+      border: 1px solid rgba(128, 131, 255, 0.34);
+    }
+    .bubble {
+      max-width: min(760px, 86%);
+      border: 1px solid rgba(70, 69, 84, 0.72);
+      background: rgba(26, 27, 34, 0.88);
+      border-radius: 16px;
+      padding: 14px 16px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
+    }
+    .message-row.user .bubble {
+      background: rgba(51, 52, 60, 0.92);
+      border-color: rgba(144, 143, 160, 0.48);
+      border-top-right-radius: 4px;
+    }
+    .message-row.agent .bubble { border-top-left-radius: 4px; }
+    .bubble.error { border-color: rgba(255, 138, 128, 0.42); color: #ffd5d1; background: rgba(147, 0, 10, 0.16); }
+
+    .tool-card {
+      max-width: 760px;
+      border: 1px solid rgba(70, 69, 84, 0.72);
+      background: rgba(18, 19, 26, 0.82);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .tool-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(70, 69, 84, 0.58);
+    }
+    .tool-title { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+    .tool-body { padding: 14px 16px; display: grid; gap: 10px; }
+    .step {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted-strong);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+    }
+    .step-left { display: flex; align-items: center; gap: 10px; }
+    .step .ok { color: var(--success); }
+    .step .pending { color: var(--warning); }
+    .source-tag {
+      border: 1px solid rgba(128, 131, 255, 0.32);
+      color: #dfe0ff;
+      background: rgba(128, 131, 255, 0.12);
+      border-radius: 8px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+
+    .composer-wrap {
+      position: fixed;
+      left: 322px;
+      right: 32px;
+      bottom: 24px;
+      pointer-events: none;
+    }
+    .composer {
+      width: min(100%, 1040px);
+      margin: 0 auto;
+      pointer-events: auto;
+      border: 1px solid rgba(144, 143, 160, 0.50);
+      background: rgba(41, 41, 49, 0.92);
+      backdrop-filter: blur(18px);
+      border-radius: 16px;
+      box-shadow: 0 24px 90px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 14px;
+      align-items: end;
+      padding: 14px;
+    }
+    .composer textarea {
+      width: 100%;
+      min-height: 42px;
+      max-height: 132px;
+      resize: vertical;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      line-height: 1.6;
+      padding: 8px 0;
+    }
+    .composer textarea::placeholder { color: #85889b; }
+    .send-btn {
+      width: 46px;
+      height: 46px;
+      border: none;
+      border-radius: 13px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: linear-gradient(135deg, #8083ff, #6366f1);
+      box-shadow: 0 10px 26px rgba(99, 102, 241, 0.38);
+      transition: transform 150ms ease, opacity 150ms ease;
+    }
+    .send-btn:hover { transform: translateY(-1px); }
+    .send-btn:disabled { opacity: 0.55; cursor: wait; transform: none; }
+    .spark {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      color: var(--text);
+      background: rgba(18, 19, 26, 0.76);
+      border: 1px solid rgba(70, 69, 84, 0.76);
+    }
+    .footnote {
+      color: #777b8f;
+      font-size: 12px;
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+      .app-shell { min-height: 100vh; height: auto; display: block; }
+      .sidebar { width: 100%; min-height: auto; border-right: none; border-bottom: 1px solid rgba(70, 69, 84, 0.65); }
+      .main { min-height: 720px; }
+      .topbar { padding: 0 18px; }
+      .workspace { padding: 20px 16px 132px; }
+      .composer-wrap { left: 16px; right: 16px; }
+      .status-row { display: none; }
+    }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <div class="header">
-      <div class="header-bar">
-        <div>
-          <h1>业务 Agent 演示页面</h1>
-          <div>你可以试试这样的问题：“帮我看一下ERP合同”“分析本月财报”“查询发票记录”。</div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">
+          <span class="material-symbols-outlined">smart_toy</span>
         </div>
-        <button id="logoutButton" class="logout-btn" type="button">退出登录</button>
+        <div>
+          <div class="brand-title">AI Agent</div>
+          <div class="brand-subtitle">业务 Agent 演示工作区</div>
+        </div>
       </div>
-    </div>
-    <div class="content">
-      <textarea id="message" placeholder="请输入需要合同、财报或发票工具支持的问题..."></textarea>
-      <button id="sendButton">发送</button>
-      <div class="hint">
-        页面在跳转到 Agent 网关前，会先把当前消息保存在 sessionStorage 里。<br/>
-        授权完成后，页面会自动恢复这条消息并继续请求。
+
+      <div class="nav-card">
+        <button id="newTaskButton" class="new-task" type="button">+ 新建一次业务请求</button>
       </div>
-      <div id="result" class="result">等待你的消息...</div>
-    </div>
+
+      <nav class="nav-list">
+        <div class="nav-item">
+          <div class="nav-left">
+            <span class="material-symbols-outlined">extension</span>
+            <span>已接入能力</span>
+          </div>
+          <span class="count-pill">3</span>
+        </div>
+        <div class="nav-item active">
+          <div class="nav-left">
+            <span class="material-symbols-outlined">history</span>
+            <span>当前会话</span>
+          </div>
+        </div>
+      </nav>
+
+      <div>
+        <div class="side-section-title">推荐试问</div>
+        <div class="suggestion-list">
+          <div class="suggestion" data-example="帮我看一下ERP合同">帮我看一下 ERP 合同</div>
+          <div class="suggestion" data-example="分析本月财报">分析本月财报</div>
+          <div class="suggestion" data-example="查询发票记录">查询发票记录</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="side-section-title">链路状态</div>
+        <div class="nav-card">
+          <div class="step">
+            <div class="step-left">
+              <span class="material-symbols-outlined ok">check_circle</span>
+              <span>site_session</span>
+            </div>
+            <span id="sessionStatus">检查中</span>
+          </div>
+          <div class="step">
+            <div class="step-left">
+              <span class="material-symbols-outlined pending">radio_button_checked</span>
+              <span>TR cache</span>
+            </div>
+            <span id="tokenStatus">按需获取</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="avatar"><span class="material-symbols-outlined">person</span></div>
+          <div class="user-meta">
+            <div id="currentUsername" class="user-name">等待登录</div>
+            <div id="currentUserId" class="user-id">session pending</div>
+          </div>
+        </div>
+        <button id="logoutButton" class="logout-btn" type="button">
+          <span class="material-symbols-outlined">logout</span>
+          退出登录
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="top-title">业务数据助手</div>
+          <div class="top-subtitle">演示登录、授权、TR 获取和 Mock MCP 调用闭环</div>
+        </div>
+        <div class="status-row">
+          <span class="status-badge"><span class="dot"></span>Mock MCP 在线</span>
+          <span class="status-badge"><span class="material-symbols-outlined" style="font-size:16px;">shield</span>按工具判权</span>
+        </div>
+      </header>
+
+      <section id="workspace" class="workspace">
+        <div id="stream" class="stream">
+          <div class="hero">
+            <div class="hero-label">AGENT GATEWAY DEMO</div>
+<!--            <h1>像控制台一样演示 Agent 授权链路</h1>-->
+<!--            <p>-->
+<!--              输入合同、财报或发票相关问题。页面会在需要授权时保存当前消息，跳转到 Agent 网关，-->
+<!--              授权完成后自动恢复消息并继续调用 Mock MCP。-->
+<!--            </p>-->
+          </div>
+        </div>
+      </section>
+
+      <div class="composer-wrap">
+        <div class="composer">
+          <div class="spark"><span class="material-symbols-outlined">auto_awesome</span></div>
+          <textarea id="message" placeholder="输入指令，例如：帮我看一下ERP合同"></textarea>
+          <button id="sendButton" class="send-btn" type="button" title="发送">
+            <span class="material-symbols-outlined">send</span>
+          </button>
+        </div>
+        <div class="footnote">AI Agent</div>
+      </div>
+    </main>
   </div>
 
   <script>
     const messageInput = document.getElementById("message");
     const sendButton = document.getElementById("sendButton");
     const logoutButton = document.getElementById("logoutButton");
-    const resultBox = document.getElementById("result");
+    const newTaskButton = document.getElementById("newTaskButton");
+    const stream = document.getElementById("stream");
+    const workspace = document.getElementById("workspace");
+    const currentUsername = document.getElementById("currentUsername");
+    const currentUserId = document.getElementById("currentUserId");
+    const sessionStatus = document.getElementById("sessionStatus");
+    const tokenStatus = document.getElementById("tokenStatus");
+
     const sourceLabels = {
       local: "本地回答",
-      cache: "本地缓存",
-      gateway: "网关新取令牌"
+      cache: "本地 TR 缓存",
+      gateway: "网关新取 TR"
     };
+
+    function scrollToBottom() {
+      requestAnimationFrame(() => {
+        workspace.scrollTop = workspace.scrollHeight;
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function addUserMessage(message) {
+      const row = document.createElement("div");
+      row.className = "message-row user";
+      row.innerHTML = `<div class="bubble">${escapeHtml(message)}</div>`;
+      stream.appendChild(row);
+      scrollToBottom();
+    }
+
+    function addAgentMessage(message, options = {}) {
+      const row = document.createElement("div");
+      row.className = "message-row agent";
+      const errorClass = options.error ? " error" : "";
+      row.innerHTML = `
+        <div class="bot-icon"><span class="material-symbols-outlined">${options.icon || "smart_toy"}</span></div>
+        <div class="bubble${errorClass}">${escapeHtml(message)}</div>
+      `;
+      stream.appendChild(row);
+      scrollToBottom();
+    }
+
+    function addToolCard({ title, source, answer }) {
+      const row = document.createElement("div");
+      row.className = "message-row agent";
+      row.innerHTML = `
+        <div class="bot-icon"><span class="material-symbols-outlined">precision_manufacturing</span></div>
+        <div class="tool-card">
+          <div class="tool-header">
+            <div class="tool-title">
+              <span class="material-symbols-outlined">dataset</span>
+              <span>${escapeHtml(title)}</span>
+            </div>
+            <span class="source-tag">${escapeHtml(sourceLabels[source] || source || "Agent")}</span>
+          </div>
+          <div class="tool-body">
+            <div class="step">
+              <div class="step-left"><span class="material-symbols-outlined ok">check_circle</span><span>解析用户意图</span></div>
+              <span>完成</span>
+            </div>
+            <div class="step">
+              <div class="step-left"><span class="material-symbols-outlined ok">verified_user</span><span>校验 TR 与策略</span></div>
+              <span>通过</span>
+            </div>
+            <div class="step">
+              <div class="step-left"><span class="material-symbols-outlined ok">hub</span><span>调用 Mock MCP</span></div>
+              <span>已返回</span>
+            </div>
+            <div class="bubble" style="max-width:100%; margin-top:6px;">${escapeHtml(answer)}</div>
+          </div>
+        </div>
+      `;
+      stream.appendChild(row);
+      scrollToBottom();
+    }
+
+    function addAuthorizationCard() {
+      const row = document.createElement("div");
+      row.className = "message-row agent";
+      row.innerHTML = `
+        <div class="bot-icon"><span class="material-symbols-outlined">key</span></div>
+        <div class="tool-card">
+          <div class="tool-header">
+            <div class="tool-title">
+              <span class="material-symbols-outlined">lock_open</span>
+              <span>需要用户授权</span>
+            </div>
+            <span class="source-tag">REDIRECT</span>
+          </div>
+          <div class="tool-body">
+            <div class="step">
+              <div class="step-left"><span class="material-symbols-outlined ok">save</span><span>消息已写入 sessionStorage</span></div>
+              <span>完成</span>
+            </div>
+            <div class="step">
+              <div class="step-left"><span class="material-symbols-outlined pending">open_in_new</span><span>正在跳转 Agent 网关授权页</span></div>
+              <span>等待确认</span>
+            </div>
+          </div>
+        </div>
+      `;
+      stream.appendChild(row);
+      scrollToBottom();
+    }
+
+    function setBusy(isBusy) {
+      sendButton.disabled = isBusy;
+      sendButton.innerHTML = isBusy
+        ? '<span class="material-symbols-outlined">hourglass_top</span>'
+        : '<span class="material-symbols-outlined">send</span>';
+    }
+
+    function inferTitle(message) {
+      if (message.includes("合同")) {
+        return "ERP 合同查询结果";
+      }
+      if (message.includes("财报") || message.includes("报表")) {
+        return "ERP 报表查询结果";
+      }
+      if (message.includes("发票")) {
+        return "ERP 发票查询结果";
+      }
+      return "Agent 模拟回答";
+    }
 
     async function readErrorMessage(response) {
       try {
@@ -57,48 +656,70 @@
           return payload.message;
         }
       } catch (error) {
-        // ignore JSON parse errors and fall back below
+        // fall through
       }
       return "请求失败，状态码：" + response.status;
     }
 
     async function sendMessage(message) {
-      resultBox.textContent = "处理中...";
-      const response = await fetch("/chat/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message })
-      });
+      addUserMessage(message);
+      addAgentMessage("正在分析问题，并判断是否需要新的资源令牌 TR...", { icon: "psychology" });
+      setBusy(true);
 
-      if (response.status === 401) {
-        resultBox.textContent = "当前登录态已失效，正在跳转到登录页...";
-        window.location.href = "/agent";
-        return;
+      try {
+        const response = await fetch("/chat/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message })
+        });
+
+        if (response.status === 401) {
+          addAgentMessage("当前登录态已失效，正在跳转到登录入口。", { icon: "login", error: true });
+          window.location.href = "/agent";
+          return;
+        }
+
+        if (!response.ok) {
+          addAgentMessage(await readErrorMessage(response), { icon: "error", error: true });
+          return;
+        }
+
+        const payload = await response.json();
+        if (payload.status === "redirect") {
+          tokenStatus.textContent = "等待授权";
+          sessionStorage.setItem("pending:" + payload.state, message);
+          addAuthorizationCard();
+          window.location.href = payload.redirectUrl;
+          return;
+        }
+
+        tokenStatus.textContent = payload.source === "cache" ? "命中缓存" : "已获取";
+        addToolCard({
+          title: inferTitle(message),
+          source: payload.source,
+          answer: payload.answer
+        });
+      } finally {
+        setBusy(false);
       }
-
-      if (!response.ok) {
-        resultBox.textContent = await readErrorMessage(response);
-        return;
-      }
-
-      const payload = await response.json();
-      if (payload.status === "redirect") {
-        sessionStorage.setItem("pending:" + payload.state, message);
-        window.location.href = payload.redirectUrl;
-        return;
-      }
-
-      const sourceLabel = sourceLabels[payload.source] || payload.source;
-      resultBox.textContent = "[" + sourceLabel + "] " + payload.answer;
     }
 
     async function ensureSession() {
       const response = await fetch("/agent/session", { method: "GET" });
       if (response.status === 401) {
+        sessionStatus.textContent = "未登录";
         window.location.href = "/agent";
         return false;
       }
-      return response.ok;
+      if (!response.ok) {
+        addAgentMessage("无法读取当前业务会话，请重新进入 Agent。", { icon: "error", error: true });
+        return false;
+      }
+      const session = await response.json();
+      currentUsername.textContent = session.username || session.userId || "已登录用户";
+      currentUserId.textContent = session.userId || "unknown user";
+      sessionStatus.textContent = "已建立";
+      return true;
     }
 
     async function recoverMessageIfNeeded() {
@@ -115,20 +736,44 @@
       sessionStorage.removeItem(key);
       history.replaceState({}, "", "/agent.html");
       messageInput.value = pendingMessage;
+      addAgentMessage("授权已完成，正在恢复授权前的消息并继续执行。", { icon: "task_alt" });
       await sendMessage(pendingMessage);
     }
 
     sendButton.addEventListener("click", async () => {
       const message = messageInput.value.trim();
       if (!message) {
-        resultBox.textContent = "请先输入问题。";
+        addAgentMessage("请先输入一个问题，例如：帮我看一下ERP合同。", { icon: "info", error: true });
         return;
       }
+      messageInput.value = "";
       await sendMessage(message);
     });
 
+    messageInput.addEventListener("keydown", async (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendButton.click();
+      }
+    });
+
+    document.querySelectorAll("[data-example]").forEach((item) => {
+      item.addEventListener("click", () => {
+        messageInput.value = item.dataset.example;
+        messageInput.focus();
+      });
+    });
+
+    newTaskButton.addEventListener("click", () => {
+      stream.innerHTML = "";
+      tokenStatus.textContent = "按需获取";
+      messageInput.value = "";
+      messageInput.focus();
+      addAgentMessage("新的演示会话已创建。你可以输入合同、财报或发票相关问题。", { icon: "add_task" });
+    });
+
     logoutButton.addEventListener("click", async () => {
-      resultBox.textContent = "正在退出登录...";
+      addAgentMessage("正在退出登录并清理本地演示缓存。", { icon: "logout" });
       sessionStorage.clear();
       await fetch("/agent/logout", { method: "POST" });
       window.location.href = "/agent";
@@ -139,6 +784,7 @@
       if (!ready) {
         return;
       }
+      addAgentMessage("会话已就绪。你可以从左侧选择示例问题，或直接输入业务请求。", { icon: "verified" });
       await recoverMessageIfNeeded();
     })();
   </script>
