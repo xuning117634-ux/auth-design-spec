@@ -1,0 +1,22 @@
+package com.huawei.it.roma.liveeda.demoagent.service;
+
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest(properties = {
+        "spring.profiles.active=real",
+        "demo-agent.mcp.mode=real"
+})
+class RealMcpModeTest {
+
+    @Autowired
+    private McpGatewayClient mcpGatewayClient;
+
+    @Test
+    void shouldUseRealMcpWhenModeIsReal() {
+        assertInstanceOf(RealMcpGatewayClient.class, mcpGatewayClient);
+    }
+}

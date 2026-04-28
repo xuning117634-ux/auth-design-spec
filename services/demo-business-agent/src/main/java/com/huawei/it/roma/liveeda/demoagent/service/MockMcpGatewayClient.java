@@ -14,12 +14,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
-public class MockMcpGatewayClient {
+@ConditionalOnProperty(prefix = "demo-agent.mcp", name = "mode", havingValue = "mock", matchIfMissing = true)
+public class MockMcpGatewayClient implements McpGatewayClient {
 
     private final PolicyCenterClient policyCenterClient;
     private final MockMcpClient mockMcpClient;
@@ -35,10 +37,12 @@ public class MockMcpGatewayClient {
         this.objectMapper = objectMapper;
     }
 
+    @Override
     public Set<String> extractAuthorizedPermissionPointCodes(String trToken) {
         return new LinkedHashSet<>(decodeTrToken(trToken).authorizedPermissionPointCodes());
     }
 
+    @Override
     public Set<String> resolveCoveredTools(String trToken) {
         DecodedTrContext trContext = decodeTrToken(trToken);
         ResolveByCodesResult resolution = policyCenterClient.resolveByCodes(trContext.authorizedPermissionPointCodes());
@@ -50,6 +54,7 @@ public class MockMcpGatewayClient {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
+    @Override
     public String invoke(String agentId, String trToken, Set<String> requiredTools, String message) {
         DecodedTrContext trContext = decodeTrToken(trToken);
         Set<String> trAuthorizedCodes = new LinkedHashSet<>(trContext.authorizedPermissionPointCodes());

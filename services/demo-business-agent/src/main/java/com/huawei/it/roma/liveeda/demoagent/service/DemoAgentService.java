@@ -31,7 +31,7 @@ public class DemoAgentService {
     private final SiteSessionStore siteSessionStore;
     private final TrCacheStore trCacheStore;
     private final AgentGatewayClient agentGatewayClient;
-    private final MockMcpGatewayClient mockMcpGatewayClient;
+    private final McpGatewayClient mcpGatewayClient;
     private final IdGenerator idGenerator;
     private final Clock clock = Clock.systemUTC();
 
@@ -92,7 +92,7 @@ public class DemoAgentService {
 
         Optional<TrCacheEntry> trCacheEntry = trCacheStore.find(siteSession.siteSessionId(), properties.getAgentId());
         if (trCacheEntry.isPresent() && trCacheEntry.get().covers(requiredTools, clock.instant())) {
-            String answer = mockMcpGatewayClient.invoke(
+            String answer = mcpGatewayClient.invoke(
                     properties.getAgentId(),
                     trCacheEntry.get().currentTr(),
                     requiredTools,
@@ -119,7 +119,7 @@ public class DemoAgentService {
         }
 
         saveTrCache(siteSession, gatewayTokenResponse);
-        String answer = mockMcpGatewayClient.invoke(
+        String answer = mcpGatewayClient.invoke(
                 properties.getAgentId(),
                 gatewayTokenResponse.accessToken(),
                 requiredTools,
@@ -150,14 +150,14 @@ public class DemoAgentService {
                         .map(GatewayTokenResponse.ConsentedScope::code)
                         .collect(Collectors.toCollection(LinkedHashSet::new));
         if (coveredPermissionPointCodes.isEmpty()) {
-            coveredPermissionPointCodes = mockMcpGatewayClient.extractAuthorizedPermissionPointCodes(
+            coveredPermissionPointCodes = mcpGatewayClient.extractAuthorizedPermissionPointCodes(
                     gatewayTokenResponse.accessToken());
         }
         TrCacheEntry merged = new TrCacheEntry(
                 siteSession.siteSessionId(),
                 properties.getAgentId(),
                 gatewayTokenResponse.accessToken(),
-                mockMcpGatewayClient.resolveCoveredTools(gatewayTokenResponse.accessToken()),
+                mcpGatewayClient.resolveCoveredTools(gatewayTokenResponse.accessToken()),
                 coveredPermissionPointCodes,
                 Instant.now(clock).plusSeconds(gatewayTokenResponse.expiresIn() == null
                         ? 3600

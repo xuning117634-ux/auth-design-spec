@@ -254,3 +254,87 @@ $env:GATEWAY_SELF_BASE_URL="http://<你的内网PC-IP>:18080"
 
 mvn -f services/agent-gateway/pom.xml spring-boot:run
 ```
+
+## 10. 本机同时启动 Demo Agent
+
+如果内网 PC 也要本地启动 `demo-business-agent` 做演示，可以在启动 Agent 网关后，再开一个 PowerShell 窗口启动 Demo Agent。
+
+### 10.1 Demo Agent 启动命令
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE="real"
+$env:APIG_X_HW_APPKEY="APIG X-HW-APPKEY"
+
+mvn -f services/demo-business-agent/pom.xml spring-boot:run
+```
+
+启动后访问：
+
+```text
+http://localhost:18082/agent
+```
+
+### 10.2 Demo Agent 的联调链路
+
+启用 `real` profile 后，Demo Agent 的链路是：
+
+```text
+本地 demo-business-agent
+  -> 本地 agent-gateway
+  -> 开发环境 IDaaS / IAM / 策略中心 / Agent 管理面
+  -> 本地 mock MCP 返回演示结果
+```
+
+也就是说：
+
+- Demo Agent 仍然连接本地 Agent 网关：`http://localhost:18080`
+- Agent 网关连接开发环境 IDaaS、IAM、策略中心和 Agent 管理面
+- Demo Agent 使用真实业务 Agent ID：`2d513fbfee9b4cfe96722060bc7f1b9d`
+- Demo Agent 会获取真实 TR
+- 最终 MCP 工具调用默认仍走本地 mock，不访问真实 MCP 网关
+
+### 10.3 MCP 网关未准备好时是否能演示？
+
+可以。
+
+当前 `demo-business-agent` 增加了独立的 MCP 调用模式开关：
+
+```yaml
+demo-agent:
+  mcp:
+    mode: mock
+```
+
+即使启用 `real` profile，默认仍然是 `mcp.mode=mock`。这表示：
+
+- 本地 Demo Agent 可以真实登录
+- 可以真实授权
+- 可以真实获取 TR
+- 可以访问开发环境策略中心
+- 最终工具调用由本地 mock MCP 返回固定演示结果
+- 不会因为真实 MCP 网关接口未准备好而阻塞演示
+
+### 10.4 真实 MCP 网关准备好后的切换方式
+
+等真实 MCP 网关接口准备好后，再把配置切成：
+
+```yaml
+demo-agent:
+  mcp:
+    mode: real
+```
+
+并补齐真实 MCP 网关地址、调用路径和请求头：
+
+```yaml
+demo-agent:
+  mcp:
+    mode: real
+    gateway-base-url: https://apig-beta.his.huawei.com/api/dev/mcp-gateway
+    invoke-path: /internal/v1/tools/invoke
+    headers:
+      X-HW-ID: com.huawei.pass.roma.event
+      X-HW-APPKEY: ${MCP_GATEWAY_X_HW_APPKEY:${APIG_X_HW_APPKEY:}}
+```
+
+当前真实 MCP 接口还未最终确认，所以默认不要切到 `real`。

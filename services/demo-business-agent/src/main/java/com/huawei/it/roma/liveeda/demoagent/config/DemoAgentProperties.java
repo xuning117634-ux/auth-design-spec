@@ -27,4 +27,18 @@ public class DemoAgentProperties {
     private String agentId;
 
     private boolean secureCookies;
+
+    private Mcp mcp = new Mcp();
+
+    @Data
+    public static class Mcp {
+
+        private String mode = "mock";
+
+        private String gatewayBaseUrl = "http://localhost:18083";
+
+        private String invokePath = "/internal/v1/tools/invoke";
+
+        private Map<String, String> headers = new LinkedHashMap<>();
+    }
 }
