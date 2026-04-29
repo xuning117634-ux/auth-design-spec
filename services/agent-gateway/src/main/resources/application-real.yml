@@ -1,6 +1,7 @@
 gateway:
   self-base-url: ${GATEWAY_SELF_BASE_URL:http://localhost:18080}
   secure-cookies: false
+  insecure-skip-tls-verify: ${GATEWAY_INSECURE_SKIP_TLS_VERIFY:true}
 
 providers:
   idaas:

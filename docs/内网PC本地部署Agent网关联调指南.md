@@ -81,6 +81,7 @@ $env:SPRING_PROFILES_ACTIVE="real"
 $env:IDAAS_CLIENT_SECRET="IDaaS client_secret"
 $env:IAM_GATEWAY_SECRET="IAM AI 账号密钥"
 $env:APIG_X_HW_APPKEY="APIG X-HW-APPKEY"
+$env:GATEWAY_INSECURE_SKIP_TLS_VERIFY="true"
 ```
 
 说明：
@@ -89,6 +90,7 @@ $env:APIG_X_HW_APPKEY="APIG X-HW-APPKEY"
 - `IDAAS_CLIENT_SECRET`：Agent 网关在 IDaaS 的客户端密钥。
 - `IAM_GATEWAY_SECRET`：Agent 网关 AI 账号密钥。
 - `APIG_X_HW_APPKEY`：访问策略中心 APIG 和 Agent 管理面 APIG 的密钥。
+- `GATEWAY_INSECURE_SKIP_TLS_VERIFY`：内网开发联调临时跳过 HTTPS 证书校验；生产环境必须配置正式证书并改为 `false`。
 
 如果策略中心和 Agent 管理面使用不同 APPKEY，可以拆开配置：
 
@@ -248,6 +250,7 @@ $env:SPRING_PROFILES_ACTIVE="real"
 $env:IDAAS_CLIENT_SECRET="IDaaS client_secret"
 $env:IAM_GATEWAY_SECRET="IAM AI 账号密钥"
 $env:APIG_X_HW_APPKEY="APIG X-HW-APPKEY"
+$env:GATEWAY_INSECURE_SKIP_TLS_VERIFY="true"
 
 # 仅当开发环境业务 Agent 后端要访问本机网关时需要配置
 $env:GATEWAY_SELF_BASE_URL="http://<你的内网PC-IP>:18080"

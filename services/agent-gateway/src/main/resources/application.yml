@@ -16,6 +16,7 @@ management:
 gateway:
   self-base-url: http://localhost:${server.port}
   secure-cookies: false
+  insecure-skip-tls-verify: false
   default-user-id: z01062668
   default-username: demo.user
 

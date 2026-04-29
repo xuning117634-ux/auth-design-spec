@@ -15,6 +15,8 @@ public class AgentGatewayProperties {
 
     private boolean secureCookies;
 
+    private boolean insecureSkipTlsVerify;
+
     @NotBlank
     private String defaultUserId;
 
