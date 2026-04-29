@@ -60,6 +60,7 @@ class JwtTokenFactoryTest {
                 .accessToken();
 
         DecodedJWT decodedJWT = JWT.decode(token);
+        assertEquals("Agent_agt_business_001", decodedJWT.getClaim("name").asString());
         java.util.Map<String, Object> agencyUser = decodedJWT.getClaim("agency_user").asMap();
         assertTrue(agencyUser.containsKey("consented_scopes"));
         @SuppressWarnings("unchecked")

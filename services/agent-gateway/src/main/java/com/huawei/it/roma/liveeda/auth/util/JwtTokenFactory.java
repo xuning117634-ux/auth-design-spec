@@ -59,7 +59,7 @@ public class JwtTokenFactory {
         Instant expiresAt = now.plus(1, ChronoUnit.DAYS);
         String tokenId = idGenerator.next("t1");
         String delegatorAppId = agentRegistryEntry.appId();
-        String delegatorAccountName = "Agent_" + delegatorAppId;
+        String delegatorAccountName = "Agent_" + agentRegistryEntry.agentId();
 
         String token = JWT.create()
                 .withIssuer("iam")
@@ -86,7 +86,7 @@ public class JwtTokenFactory {
         Instant expiresAt = now.plus(1, ChronoUnit.HOURS);
         String tokenId = idGenerator.next("tr");
         String delegatorAppId = agentRegistryEntry.appId();
-        String delegatorAccountName = "Agent_" + delegatorAppId;
+        String delegatorAccountName = "Agent_" + agentRegistryEntry.agentId();
 
         Map<String, Object> agencyUserClaim = new LinkedHashMap<>();
         agencyUserClaim.put("idp", "idaas");

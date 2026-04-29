@@ -44,7 +44,7 @@ class RealIamAssumeAgentTokenClientTest {
                           "data": {
                             "type": "assume_agent_token",
                             "attributes": {
-                              "delegator_account_name": "Agent_com.huawei.business.agent",
+                              "delegator_account_name": "Agent_agt_business_001",
                               "delegator_appid": "com.huawei.business.agent"
                             }
                           }

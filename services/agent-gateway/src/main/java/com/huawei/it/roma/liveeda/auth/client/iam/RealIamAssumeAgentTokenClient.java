@@ -28,7 +28,7 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
         RestClient restClient = restClientBuilder.baseUrl(iamProperties.getBaseUrl()).build();
         IssuedToken gatewayAgentToken = iamGatewayTokenClient.getGatewayAgentToken();
         String delegatorAppId = agentRegistryEntry.appId();
-        String delegatorAccountName = "Agent_" + delegatorAppId;
+        String delegatorAccountName = "Agent_" + agentRegistryEntry.agentId();
         TokenResponse response = restClient.post()
                 .uri(iamProperties.getAssumeAgentTokenPath(), iamProperties.getGatewayProject())
                 .header(HttpHeaders.AUTHORIZATION, gatewayAgentToken.accessToken())
