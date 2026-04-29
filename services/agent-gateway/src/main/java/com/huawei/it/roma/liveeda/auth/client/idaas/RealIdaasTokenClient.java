@@ -125,13 +125,15 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
         RestClient restClient = restClientBuilder.baseUrl(idaaSProperties.getTokenUrl()).build();
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "authorization_code");
-        form.add("client_id", idaaSProperties.getClientId());
-        form.add("client_secret", idaaSProperties.getClientSecret());
         form.add("code", code);
         form.add("redirect_uri", redirectUri);
 
         TokenResponse response = restClient.post()
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .headers(headers -> headers.setBasicAuth(
+                        idaaSProperties.getClientId(),
+                        idaaSProperties.getClientSecret()
+                ))
                 .body(form)
                 .retrieve()
                 .body(TokenResponse.class);

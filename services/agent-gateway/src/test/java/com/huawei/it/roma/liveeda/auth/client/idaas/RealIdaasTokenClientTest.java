@@ -17,6 +17,8 @@ import com.huawei.it.roma.liveeda.auth.domain.IssuedToken;
 import com.huawei.it.roma.liveeda.auth.domain.UserAuthorizationResult;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -38,14 +40,13 @@ class RealIdaasTokenClientTest {
 
         MultiValueMap<String, String> expectedForm = new LinkedMultiValueMap<>();
         expectedForm.add("grant_type", "authorization_code");
-        expectedForm.add("client_id", "agent_gateway_client");
-        expectedForm.add("client_secret", "mock-client-secret");
         expectedForm.add("code", "code_001");
         expectedForm.add("redirect_uri", "http://localhost:18080/gw/auth/base/callback");
 
         server.expect(once(), requestTo("https://idaas.example.com/saaslogin1/oauth2/agent/token"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, basicAuth("agent_gateway_client", "mock-client-secret")))
                 .andExpect(content().formData(expectedForm))
                 .andRespond(withSuccess("""
                         {
@@ -60,6 +61,11 @@ class RealIdaasTokenClientTest {
 
         assertEquals("opaque_tc_token", token.accessToken());
         server.verify();
+    }
+
+    private String basicAuth(String clientId, String clientSecret) {
+        String credential = clientId + ":" + clientSecret;
+        return "Basic " + Base64.getEncoder().encodeToString(credential.getBytes(StandardCharsets.UTF_8));
     }
 
     @Test
