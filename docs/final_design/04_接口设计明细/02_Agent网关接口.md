@@ -138,7 +138,7 @@ Content-Type: application/json
 
 1. 校验 `ticketST` 存在、未过期、未使用。
 2. 校验 `ticketST` 绑定的 `agent_id` 与请求一致。
-3. 使用 `ticketST` 绑定的 `code`，结合 Agent 网关的 `client_id + client_secret`，调用 IDaaS `/oauth2/token`，换取 `Tc` 对应的短令牌 `access_token`。
+3. 使用 `ticketST` 绑定的 `code`，并通过 `client_secret_basic` 认证方式调用 IDaaS `/oauth2/token`，换取 `Tc` 对应的短令牌 `access_token`。
 4. 使用 `Tc access_token` 调 IDaaS 用户信息接口。
 5. 将 `ticketST` 标记为已使用。
 6. 返回用户信息。

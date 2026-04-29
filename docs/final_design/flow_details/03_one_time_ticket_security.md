@@ -23,7 +23,7 @@ ticketST -> agent_id, authorization_code, client_id, redirect_uri, used, expires
 - 交换成功后立即标记为 used。
 - 不允许返回 `Tc` 或 `TR`。
 - `/gw/auth/base/callback` 不立即用 `code` 换用户信息。
-- `/gw/auth/ticket/exchange` 才执行 `code + client_id + client_secret + 可选 redirect_uri -> Tc access_token -> IDaaS 用户信息`。
+- `/gw/auth/ticket/exchange` 才执行 `code + client_secret_basic + 可选 redirect_uri -> Tc access_token -> IDaaS 用户信息`。
 - 获取用户信息接口只传 `access_token`。
 
 ## 3. token_result_ticket

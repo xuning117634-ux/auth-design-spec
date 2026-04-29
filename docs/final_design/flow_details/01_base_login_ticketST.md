@@ -58,5 +58,5 @@ ticketST -> agent_id, authorization_code, client_id, redirect_uri, used, expires
 - `ticketST` 绑定本次换 token 所需的 `client_id` 和可选 `redirect_uri`。
 - 回跳业务 Agent 时只带 `ticketST + state`。
 - 用户信息只通过后端交换接口返回，不进入浏览器 URL。
-- `code + client_id + client_secret + 可选 redirect_uri -> Tc access_token -> 用户信息` 发生在 `/gw/auth/ticket/exchange`，不是发生在 `/gw/auth/base/callback`。
+- `code + client_secret_basic + 可选 redirect_uri -> Tc access_token -> 用户信息` 发生在 `/gw/auth/ticket/exchange`，不是发生在 `/gw/auth/base/callback`。
 - 业务 Agent 成功交换后创建自己的 `site_session`。
