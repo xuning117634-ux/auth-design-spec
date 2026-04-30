@@ -1,6 +1,5 @@
 package com.huawei.it.roma.liveeda.auth.web;
 
-import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import java.util.List;
 
 public record TokenResultExchangeResponse(
@@ -9,7 +8,7 @@ public record TokenResultExchangeResponse(
         String accessToken,
         Long expiresIn,
         AgencyUser agencyUser,
-        List<AuthorizedPermissionPoint> consentedScopes
+        List<String> consentedScopes
 ) {
     public record AgencyUser(
             String userId,

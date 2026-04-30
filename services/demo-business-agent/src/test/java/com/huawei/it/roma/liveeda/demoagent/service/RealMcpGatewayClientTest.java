@@ -11,6 +11,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.demoagent.config.DemoAgentProperties;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -31,30 +34,31 @@ class RealMcpGatewayClientTest {
                 new ObjectMapper(),
                 org.mockito.Mockito.mock(PolicyCenterClient.class)
         );
+        String tr = buildTr("agt_business_001", "Y30037812", "erp:contract:r");
 
         server.expect(once(), requestTo("https://apig-beta.his.huawei.com/api/dev/mcp-gateway/internal/v1/tools/invoke"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-HW-ID", "com.huawei.pass.roma.event"))
                 .andExpect(header("X-HW-APPKEY", "mock-app-key"))
                 .andExpect(jsonPath("$.agentId").value("agt_business_001"))
-                .andExpect(jsonPath("$.tr").value("tr_demo_001"))
+                .andExpect(jsonPath("$.tr").value(tr))
                 .andExpect(jsonPath("$.tools[0]").value("mcp:contract-server/get_contract"))
-                .andExpect(jsonPath("$.message").value("帮我看一下ERP合同"))
+                .andExpect(jsonPath("$.message").value("show contract"))
                 .andRespond(withSuccess("""
                         {
                           "status": "SUCCESS",
-                          "answer": "真实 MCP 返回合同信息"
+                          "answer": "real mcp contract result"
                         }
                         """, MediaType.APPLICATION_JSON));
 
         String answer = client.invoke(
                 "agt_business_001",
-                "tr_demo_001",
+                tr,
                 Set.of("mcp:contract-server/get_contract"),
-                "帮我看一下ERP合同"
+                "show contract"
         );
 
-        assertEquals("真实 MCP 返回合同信息", answer);
+        assertEquals("real mcp contract result", answer);
         server.verify();
     }
 
@@ -71,5 +75,29 @@ class RealMcpGatewayClientTest {
                 "X-HW-APPKEY", "mock-app-key"
         ));
         return properties;
+    }
+
+    private String buildTr(String agentId, String userId, String... permissionPointCodes) {
+        String header = Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+        String payload = Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(("""
+                        {
+                          "aud": "%s",
+                          "agency_user": {
+                            "user": "{\\"uid\\":\\"%s\\"}",
+                            "consented_scopes": [%s]
+                          }
+                        }
+                        """.formatted(
+                        agentId,
+                        userId,
+                        String.join(",", List.of(permissionPointCodes).stream()
+                                .map(code -> "\"" + code + "\"")
+                                .toList())
+                )).getBytes(StandardCharsets.UTF_8));
+        return header + "." + payload + ".";
     }
 }

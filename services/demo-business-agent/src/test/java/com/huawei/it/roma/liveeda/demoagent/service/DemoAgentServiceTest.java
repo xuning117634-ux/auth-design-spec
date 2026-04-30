@@ -19,6 +19,8 @@ import com.huawei.it.roma.liveeda.demoagent.store.SiteSessionStore;
 import com.huawei.it.roma.liveeda.demoagent.store.TrCacheStore;
 import com.huawei.it.roma.liveeda.demoagent.util.IdGenerator;
 import com.huawei.it.roma.liveeda.demoagent.web.ChatResponse;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -65,14 +67,14 @@ class DemoAgentServiceTest {
                 anyString()
         )).thenReturn(new GatewayTokenResponse("tr_demo_001", 1800L, null, null, null));
         when(mockMcpGatewayClient.extractAuthorizedPermissionPointCodes("tr_demo_001"))
-                .thenReturn(java.util.Set.of("erp:contract:r"));
+                .thenReturn(Set.of("erp:contract:r"));
         when(mockMcpGatewayClient.resolveCoveredTools("tr_demo_001"))
-                .thenReturn(java.util.Set.of("mcp:contract-server/get_contract"));
+                .thenReturn(Set.of("mcp:contract-server/get_contract"));
         when(mockMcpGatewayClient.invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString()))
-                .thenReturn("模拟的合同查询结果");
+                .thenReturn("mock contract result");
 
-        ChatResponse first = demoAgentService.handleChat(siteSession.siteSessionId(), "请帮我看一下ERP合同");
-        ChatResponse second = demoAgentService.handleChat(siteSession.siteSessionId(), "继续看一下ERP合同");
+        ChatResponse first = demoAgentService.handleChat(siteSession.siteSessionId(), "show contract");
+        ChatResponse second = demoAgentService.handleChat(siteSession.siteSessionId(), "show contract again");
 
         assertEquals("answer", first.status());
         assertEquals("gateway", first.source());
@@ -88,7 +90,8 @@ class DemoAgentServiceTest {
                 eq("http://localhost:18082/agent"),
                 anyString()
         );
-        verify(mockMcpGatewayClient, times(2)).invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString());
+        verify(mockMcpGatewayClient, times(2))
+                .invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString());
     }
 
     @Test
@@ -98,9 +101,15 @@ class DemoAgentServiceTest {
                 anyList(),
                 eq("http://localhost:18082/agent"),
                 anyString()
-        )).thenReturn(new GatewayTokenResponse(null, null, "redirect", "http://localhost:18080/gw/auth/authorize?request_id=req_001", "req_001"));
+        )).thenReturn(new GatewayTokenResponse(
+                null,
+                null,
+                "redirect",
+                "http://localhost:18080/gw/auth/authorize?request_id=req_001",
+                "req_001"
+        ));
 
-        ChatResponse response = demoAgentService.handleChat(siteSession.siteSessionId(), "请帮我查发票");
+        ChatResponse response = demoAgentService.handleChat(siteSession.siteSessionId(), "show invoice");
 
         assertEquals("redirect", response.status());
         assertEquals("http://localhost:18080/gw/auth/authorize?request_id=req_001", response.redirectUrl());
@@ -117,15 +126,15 @@ class DemoAgentServiceTest {
                         null,
                         "req_001",
                         new GatewayTokenResponse.AgencyUser("z01062668", "z01062668"),
-                        java.util.List.of(new GatewayTokenResponse.ConsentedScope("erp:contract:r", "ERP 合同的可读权限"))
+                        List.of("erp:contract:r")
                 ));
         when(mockMcpGatewayClient.resolveCoveredTools("tr_demo_001"))
-                .thenReturn(java.util.Set.of("mcp:contract-server/get_contract"));
+                .thenReturn(Set.of("mcp:contract-server/get_contract"));
         when(mockMcpGatewayClient.invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString()))
-                .thenReturn("模拟的合同查询结果");
+                .thenReturn("mock contract result");
 
         demoAgentService.exchangeTokenResult(siteSession.siteSessionId(), "req_001", "trt_001");
-        ChatResponse response = demoAgentService.handleChat(siteSession.siteSessionId(), "请帮我看一下ERP合同");
+        ChatResponse response = demoAgentService.handleChat(siteSession.siteSessionId(), "show contract");
 
         assertEquals("answer", response.status());
         assertEquals("cache", response.source());

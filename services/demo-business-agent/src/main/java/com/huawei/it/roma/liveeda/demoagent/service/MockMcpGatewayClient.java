@@ -1,13 +1,10 @@
 package com.huawei.it.roma.liveeda.demoagent.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient.AgentStrategyView;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient.PermissionPointView;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient.ResolveByCodesResult;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -44,10 +41,10 @@ public class MockMcpGatewayClient implements McpGatewayClient {
 
     @Override
     public Set<String> resolveCoveredTools(String trToken) {
-        DecodedTrContext trContext = decodeTrToken(trToken);
+        TrTokenParser.DecodedTrContext trContext = decodeTrToken(trToken);
         ResolveByCodesResult resolution = policyCenterClient.resolveByCodes(trContext.authorizedPermissionPointCodes());
         if (resolution == null || resolution.tools() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "策略中心未返回 TR 对应的工具集合");
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Policy center returned empty tools for TR");
         }
         return resolution.tools().stream()
                 .map(PolicyCenterClient.ToolView::toolId)
@@ -56,7 +53,10 @@ public class MockMcpGatewayClient implements McpGatewayClient {
 
     @Override
     public String invoke(String agentId, String trToken, Set<String> requiredTools, String message) {
-        DecodedTrContext trContext = decodeTrToken(trToken);
+        TrTokenParser.DecodedTrContext trContext = decodeTrToken(trToken);
+        if (!agentId.equals(trContext.agentId())) {
+            throw forbidden("TR agent does not match request agent");
+        }
         Set<String> trAuthorizedCodes = new LinkedHashSet<>(trContext.authorizedPermissionPointCodes());
 
         for (String requiredTool : requiredTools.stream().sorted().toList()) {
@@ -65,7 +65,8 @@ public class MockMcpGatewayClient implements McpGatewayClient {
 
             for (String requiredCode : toolResolution.requiredPermissionPointCodes()) {
                 if (!trAuthorizedCodes.contains(requiredCode)) {
-                    throw forbidden("当前请求缺少所需的用户授权：" + permissionPointLabels.getOrDefault(requiredCode, requiredCode));
+                    throw forbidden("TR does not grant required permission point: "
+                            + permissionPointLabels.getOrDefault(requiredCode, requiredCode));
                 }
             }
 
@@ -82,7 +83,8 @@ public class MockMcpGatewayClient implements McpGatewayClient {
             for (String requiredCode : toolResolution.requiredPermissionPointCodes()) {
                 List<AgentStrategyView> strategies = strategiesByCode.getOrDefault(requiredCode, List.of());
                 if (!isPermissionPointAllowed(strategies, trContext.userId())) {
-                    throw forbidden("当前用户无权使用该 Agent 的此项功能：" + permissionPointLabels.getOrDefault(requiredCode, requiredCode));
+                    throw forbidden("Current user is not allowed by agent strategy: "
+                            + permissionPointLabels.getOrDefault(requiredCode, requiredCode));
                 }
             }
         }
@@ -90,7 +92,7 @@ public class MockMcpGatewayClient implements McpGatewayClient {
         Set<String> allowedToolsFromTr = resolveCoveredTools(trToken);
         for (String requiredTool : requiredTools) {
             if (!allowedToolsFromTr.contains(requiredTool)) {
-                throw forbidden("当前资源令牌不允许调用工具：" + requiredTool);
+                throw forbidden("TR does not cover tool: " + requiredTool);
             }
         }
 
@@ -148,43 +150,16 @@ public class MockMcpGatewayClient implements McpGatewayClient {
         return false;
     }
 
-    private DecodedTrContext decodeTrToken(String trToken) {
+    private TrTokenParser.DecodedTrContext decodeTrToken(String trToken) {
         try {
-            String[] parts = trToken.split("\\.");
-            if (parts.length < 2) {
-                throw new IllegalArgumentException("Invalid JWT format");
-            }
-            byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]);
-            JsonNode payload = objectMapper.readTree(new String(payloadBytes, StandardCharsets.UTF_8));
-            JsonNode agencyUser = payload.path("agency_user");
-            String userId = agencyUser.path("user_id").asText(null);
-            if (userId == null || userId.isBlank()) {
-                throw new IllegalArgumentException("TR missing agency_user.user_id");
-            }
-
-            Set<String> permissionPointCodes = new LinkedHashSet<>();
-            JsonNode consentedScopes = agencyUser.path("consented_scopes");
-            if (consentedScopes.isArray()) {
-                consentedScopes.forEach(node -> {
-                    String code = node.path("code").asText();
-                    if (!code.isBlank()) {
-                        permissionPointCodes.add(code);
-                    }
-                });
-            }
-            return new DecodedTrContext(userId, permissionPointCodes);
+            return new TrTokenParser(objectMapper).decode(trToken);
         } catch (Exception exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "当前资源令牌不可解析，无法模拟 MCP 网关校验", exception);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "TR cannot be parsed for mock MCP gateway validation", exception);
         }
     }
 
     private ResponseStatusException forbidden(String reason) {
         return new ResponseStatusException(HttpStatus.FORBIDDEN, reason);
-    }
-
-    private record DecodedTrContext(
-            String userId,
-            Set<String> authorizedPermissionPointCodes
-    ) {
     }
 }

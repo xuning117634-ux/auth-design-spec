@@ -49,7 +49,7 @@ public class JwtTokenFactory {
                 .withJWTId(tokenId)
                 .withClaim("token_id", tokenId)
                 .withClaim("user", userClaim)
-                .withClaim("consented_scopes", toPermissionPointClaims(authorizedPermissionPoints))
+                .withClaim("consented_scopes", toPermissionPointCodes(authorizedPermissionPoints))
                 .sign(algorithm());
         return new IssuedToken(token, expiresAt);
     }
@@ -87,30 +87,32 @@ public class JwtTokenFactory {
         String tokenId = idGenerator.next("tr");
         String delegatorAppId = agentRegistryEntry.appId();
         String delegatorAccountName = "Agent_" + agentRegistryEntry.agentId();
+        List<String> permissionPointCodes = toPermissionPointCodes(authorizationResult.authorizedPermissionPoints());
 
         Map<String, Object> agencyUserClaim = new LinkedHashMap<>();
         agencyUserClaim.put("idp", "idaas");
-        agencyUserClaim.put("idp_id", authorizationResult.userId());
-        agencyUserClaim.put("user_id", authorizationResult.userId());
-        agencyUserClaim.put("global_user_id", authorizationResult.userId());
-        agencyUserClaim.put("ouath_client_id", "agent_gateway_client");
-        agencyUserClaim.put("outh_client_app_id", agentRegistryEntry.appId());
-        agencyUserClaim.put("consented_scopes", toPermissionPointClaims(authorizationResult.authorizedPermissionPoints()));
+        agencyUserClaim.put("idp_id", null);
+        agencyUserClaim.put("oauth_client_app_id", null);
+        agencyUserClaim.put("user", buildAgencyUserJson(authorizationResult.userId(), authorizationResult.username()));
+        agencyUserClaim.put("oauth_client_id", null);
+        agencyUserClaim.put("consented_scopes", permissionPointCodes);
 
         String token = JWT.create()
                 .withIssuer("iam")
-                .withSubject(delegatorAppId)
+                .withSubject(delegatorAccountName)
                 .withIssuedAt(now)
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt)
                 .withJWTId(tokenId)
                 .withClaim("token_id", tokenId)
+                .withClaim("aud", agentRegistryEntry.agentId())
                 .withClaim("name", delegatorAccountName)
                 .withClaim("account_id", "mock-account-" + delegatorAccountName)
                 .withClaim("enterprise", MOCK_ENTERPRISE_ID)
                 .withClaim("account_type", MOCK_ACCOUNT_TYPE)
                 .withClaim("project", delegatorAppId)
                 .withClaim("access_domain", MOCK_ACCESS_DOMAIN)
+                .withClaim("scope", String.join(" ", permissionPointCodes))
                 .withClaim("agent", buildAgentClaim(agentRegistryEntry))
                 .withClaim("agency_user", agencyUserClaim)
                 .sign(algorithm());
@@ -129,14 +131,30 @@ public class JwtTokenFactory {
         return agentClaim;
     }
 
-    private List<Map<String, Object>> toPermissionPointClaims(List<AuthorizedPermissionPoint> permissionPoints) {
+    private List<String> toPermissionPointCodes(List<AuthorizedPermissionPoint> permissionPoints) {
         return permissionPoints.stream()
-                .map(point -> {
-                    Map<String, Object> claim = new LinkedHashMap<>();
-                    claim.put("code", point.code());
-                    claim.put("displayNameZh", point.displayNameZh());
-                    return claim;
-                })
+                .map(AuthorizedPermissionPoint::code)
                 .toList();
+    }
+
+    private String buildAgencyUserJson(String userId, String username) {
+        return """
+                {"displayName":"%s","displayNameCn":"%s","tenantId":"%s","uid":"%s","uuid":"uuid~%s"}
+                """.formatted(
+                escapeJson(username),
+                escapeJson(username),
+                MOCK_ENTERPRISE_ID,
+                escapeJson(userId),
+                escapeJson(userId)
+        ).trim();
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
     }
 }

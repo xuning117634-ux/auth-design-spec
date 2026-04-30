@@ -44,18 +44,18 @@ Content-Type: application/json
 
 1. 解析 `TR`
 2. 读取：
-   - `agent_id`
-   - `agency_user.user_id`
+   - `aud`，作为业务 Agent ID
+   - `agency_user.user` JSON 字符串中的 `uid`，作为 `subject.user_id`
    - `agency_user.consented_scopes`
 3. 调策略中心 `resolve-by-tools`
 4. 得到当前 `tool_id` 所需的 `permissionPointCodes`
-5. 校验这些权限点是否都已经包含在 `TR.agency_user.consented_scopes[].code` 中
+5. 校验这些权限点是否都已经包含在 `TR.agency_user.consented_scopes` 中
 6. 查询当前 `agent_id + permissionPointCodes` 的 Agent 策略
 7. 执行判定：
    - `DENY` 优先
    - 无策略默认允许
    - 有 `PERMIT` 时必须命中至少一条
-8. 再以 `TR.agency_user.consented_scopes[].code` 调策略中心 `resolve-by-codes`
+8. 再以 `TR.agency_user.consented_scopes` 调策略中心 `resolve-by-codes`
 9. 拿到 `TR` 对应的工具集合
 10. 校验当前 `tool_id` 是否包含在该工具集合中
 11. 判定通过后，路由到具体 `MCP 服务`

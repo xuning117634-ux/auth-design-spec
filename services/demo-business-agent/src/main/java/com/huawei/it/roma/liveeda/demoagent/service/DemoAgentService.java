@@ -147,7 +147,6 @@ public class DemoAgentService {
         Set<String> coveredPermissionPointCodes = gatewayTokenResponse.consentedScopes() == null
                 ? Set.of()
                 : gatewayTokenResponse.consentedScopes().stream()
-                        .map(GatewayTokenResponse.ConsentedScope::code)
                         .collect(Collectors.toCollection(LinkedHashSet::new));
         if (coveredPermissionPointCodes.isEmpty()) {
             coveredPermissionPointCodes = mcpGatewayClient.extractAuthorizedPermissionPointCodes(

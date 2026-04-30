@@ -27,6 +27,7 @@ import com.huawei.it.roma.liveeda.auth.web.TokenResultExchangeRequest;
 import com.huawei.it.roma.liveeda.auth.web.TokenResultExchangeResponse;
 import java.net.URI;
 import java.time.Clock;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -166,7 +167,11 @@ public class GatewayAuthService {
                 ticket.trToken(),
                 expiresIn,
                 new TokenResultExchangeResponse.AgencyUser(ticket.userId(), ticket.userId(), ticket.username()),
-                ticket.consentedScopes()
+                ticket.consentedScopes() == null
+                        ? List.of()
+                        : ticket.consentedScopes().stream()
+                                .map(com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint::code)
+                                .toList()
         );
     }
 

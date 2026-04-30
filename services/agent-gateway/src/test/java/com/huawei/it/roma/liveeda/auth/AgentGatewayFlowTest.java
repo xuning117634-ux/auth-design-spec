@@ -180,7 +180,7 @@ class AgentGatewayFlowTest {
                 .andExpect(jsonPath("$.status").value("TOKEN_READY"))
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.expiresIn").isNumber())
-                .andExpect(jsonPath("$.consentedScopes[0].code").value("erp:contract:r"));
+                .andExpect(jsonPath("$.consentedScopes[0]").value("erp:contract:r"));
 
         mockMvc.perform(post("/gw/token/result/exchange")
                         .contentType(MediaType.APPLICATION_JSON)

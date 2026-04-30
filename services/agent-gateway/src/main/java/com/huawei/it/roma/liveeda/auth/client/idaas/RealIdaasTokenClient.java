@@ -13,7 +13,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
@@ -89,36 +88,18 @@ public class RealIdaasTokenClient implements IdaasTokenClient {
     }
 
     private List<AuthorizedPermissionPoint> extractConsentedScopes(DecodedJWT decodedJWT) {
-        List<Map<?, ?>> claims = readMapClaims(decodedJWT, "consented_scopes");
+        List<String> claims = decodedJWT.getClaim("consented_scopes").asList(String.class);
         List<AuthorizedPermissionPoint> permissionPoints = new ArrayList<>();
         if (claims == null) {
             return permissionPoints;
         }
-        for (Map<?, ?> claim : claims) {
-            String code = claim == null ? null : stringValue(claim.get("code"));
-            String displayNameZh = claim == null ? null : stringValue(claim.get("displayNameZh"));
+        for (String claim : claims) {
+            String code = stringValue(claim);
             if (code != null && !code.isBlank()) {
-                permissionPoints.add(new AuthorizedPermissionPoint(
-                        code,
-                        displayNameZh == null || displayNameZh.isBlank() ? code : displayNameZh
-                ));
+                permissionPoints.add(new AuthorizedPermissionPoint(code, code));
             }
         }
         return permissionPoints;
-    }
-
-    private List<Map<?, ?>> readMapClaims(DecodedJWT decodedJWT, String claimName) {
-        List<Object> rawClaims = decodedJWT.getClaim(claimName).asList(Object.class);
-        if (rawClaims == null) {
-            return null;
-        }
-        List<Map<?, ?>> claims = new ArrayList<>();
-        for (Object rawClaim : rawClaims) {
-            if (rawClaim instanceof Map<?, ?> map) {
-                claims.add(map);
-            }
-        }
-        return claims;
     }
 
     private TokenResponse exchangeToken(String code, String redirectUri) {

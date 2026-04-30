@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.it.roma.liveeda.auth.config.MockTokenProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
@@ -25,25 +26,21 @@ class JwtTokenFactoryTest {
         String token = jwtTokenFactory.issueMockTc(
                         "z01062668",
                         "demo.user",
-                        List.of(new AuthorizedPermissionPoint("erp:contract:r", "ERP 合同的可读权限")))
+                        List.of(new AuthorizedPermissionPoint("erp:contract:r", "ERP contract read permission")))
                 .accessToken();
 
         DecodedJWT decodedJWT = JWT.decode(token);
-        assertEquals("erp:contract:r", decodedJWT.getClaim("consented_scopes").asList(Object.class).stream()
-                .map(value -> (java.util.Map<?, ?>) value)
-                .map(value -> String.valueOf(value.get("code")))
-                .findFirst()
-                .orElseThrow());
+        assertEquals("erp:contract:r", decodedJWT.getClaim("consented_scopes").asList(String.class).getFirst());
     }
 
     @Test
-    void shouldWriteConsentedScopesIntoMockTrAgencyUser() {
+    void shouldWriteRealIamLikeConsentedScopesIntoMockTrAgencyUser() throws Exception {
         JwtTokenFactory jwtTokenFactory = buildFactory();
 
         String token = jwtTokenFactory.issueMockTr(
                         new AgentRegistryEntry(
                                 "agt_business_001",
-                                "业务数据助手",
+                                "business-data-assistant",
                                 "ent_001",
                                 "com.huawei.business.agent",
                                 List.of("localhost"),
@@ -53,7 +50,7 @@ class JwtTokenFactoryTest {
                                 "z01062668",
                                 "demo.user",
                                 Set.of("erp:contract:r"),
-                                List.of(new AuthorizedPermissionPoint("erp:contract:r", "ERP 合同的可读权限")),
+                                List.of(new AuthorizedPermissionPoint("erp:contract:r", "ERP contract read permission")),
                                 "tc_demo_001",
                                 Instant.parse("2026-04-21T10:00:00Z")
                         ))
@@ -61,12 +58,18 @@ class JwtTokenFactoryTest {
 
         DecodedJWT decodedJWT = JWT.decode(token);
         assertEquals("Agent_agt_business_001", decodedJWT.getClaim("name").asString());
+        assertEquals("Agent_agt_business_001", decodedJWT.getSubject());
+        assertEquals("agt_business_001", decodedJWT.getClaim("aud").asString());
+        assertEquals("erp:contract:r", decodedJWT.getClaim("scope").asString());
         java.util.Map<String, Object> agencyUser = decodedJWT.getClaim("agency_user").asMap();
         assertTrue(agencyUser.containsKey("consented_scopes"));
         @SuppressWarnings("unchecked")
-        List<java.util.Map<String, Object>> consentedScopes = (List<java.util.Map<String, Object>>) agencyUser.get("consented_scopes");
-        assertEquals("erp:contract:r", consentedScopes.getFirst().get("code"));
-        assertEquals("ERP 合同的可读权限", consentedScopes.getFirst().get("displayNameZh"));
+        List<String> consentedScopes = (List<String>) agencyUser.get("consented_scopes");
+        assertEquals("erp:contract:r", consentedScopes.getFirst());
+        assertEquals("z01062668", new ObjectMapper()
+                .readTree(String.valueOf(agencyUser.get("user")))
+                .path("uid")
+                .asText());
     }
 
     private JwtTokenFactory buildFactory() {

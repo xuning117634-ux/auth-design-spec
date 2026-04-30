@@ -327,7 +327,7 @@ sequenceDiagram
 
     MCP网关->>PC: resolve-by-tools(currentTool)
     MCP网关->>PC: query strategies(requiredPermissionPointCodes)
-    MCP网关->>PC: resolve-by-codes(TR.agency_user.consented_scopes[].code)
+    MCP网关->>PC: resolve-by-codes(TR.agency_user.consented_scopes)
     MCP网关->>MCP服务: 通过 TR 范围和策略判断后路由调用
     MCP服务-->>MCP网关: 返回工具结果
     MCP网关-->>Agent: 返回数据
@@ -349,7 +349,9 @@ sequenceDiagram
 - 业务 Agent 只上传 `required_tools`。
 - Agent 网关负责 `required_tools -> requiredPermissionPointCodes`。
 - `Tc` 和 `TR.agency_user` 都携带 `consented_scopes`。
-- `consented_scopes` 是三方约定字段，元素为权限点对象，至少包含 `code + displayNameZh`。
+- `consented_scopes` 是三方约定字段，格式为权限点 code 字符串数组。
+- `scope` 是预留字段，不作为运行时鉴权依据。
+- `TR.aud` 是业务 Agent ID，`TR.agency_user.user` JSON 字符串里的 `uid` 是运行时策略判断用户 ID。
 - `TR` 是用户授权给 Agent 的权限点上限边界。
 - Agent 网关不维护长期登录态，不再把登录用户桥接成长期网关会话。
 - IDaaS 负责判断用户是否已经登录，必要时展示登录页或授权页。

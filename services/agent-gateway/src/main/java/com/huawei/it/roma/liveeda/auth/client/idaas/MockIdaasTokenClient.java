@@ -67,18 +67,15 @@ public class MockIdaasTokenClient implements IdaasTokenClient {
     }
 
     private List<AuthorizedPermissionPoint> extractConsentedScopes(DecodedJWT decodedJWT) {
-        List<Object> rawClaims = decodedJWT.getClaim("consented_scopes").asList(Object.class);
+        List<String> rawClaims = decodedJWT.getClaim("consented_scopes").asList(String.class);
         List<AuthorizedPermissionPoint> permissionPoints = new ArrayList<>();
         if (rawClaims == null) {
             return permissionPoints;
         }
-        for (Object rawClaim : rawClaims) {
-            if (rawClaim instanceof Map<?, ?> claim) {
-                String code = claim.get("code") == null ? null : String.valueOf(claim.get("code"));
-                String displayNameZh = claim.get("displayNameZh") == null ? code : String.valueOf(claim.get("displayNameZh"));
-                if (code != null && !code.isBlank()) {
-                    permissionPoints.add(new AuthorizedPermissionPoint(code, displayNameZh));
-                }
+        for (String rawClaim : rawClaims) {
+            String code = rawClaim == null ? null : rawClaim.trim();
+            if (code != null && !code.isBlank()) {
+                permissionPoints.add(new AuthorizedPermissionPoint(code, code));
             }
         }
         return permissionPoints;

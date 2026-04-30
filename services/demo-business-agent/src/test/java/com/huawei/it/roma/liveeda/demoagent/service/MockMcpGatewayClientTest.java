@@ -179,7 +179,23 @@ class MockMcpGatewayClientTest {
         verify(policyCenterClient).resolveByCodes(anySet());
     }
 
+    @Test
+    void shouldRejectWhenTrAudienceDoesNotMatchRequestAgent() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> mockMcpGatewayClient.invoke(
+                "agt_business_001",
+                buildTrForAgent("other_agent_001", "z01062668", "erp:contract:r"),
+                Set.of("mcp:contract-server/get_contract"),
+                "show contract"
+        ));
+
+        assertEquals(403, exception.getStatusCode().value());
+    }
+
     private String buildTr(String userId, String... permissionPointCodes) {
+        return buildTrForAgent("agt_business_001", userId, permissionPointCodes);
+    }
+
+    private String buildTrForAgent(String agentId, String userId, String... permissionPointCodes) {
         String header = Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
@@ -187,15 +203,17 @@ class MockMcpGatewayClientTest {
                 .withoutPadding()
                 .encodeToString(("""
                         {
+                          "aud": "%s",
                           "agency_user": {
-                            "user_id": "%s",
+                            "user": "{\\"uid\\":\\"%s\\"}",
                             "consented_scopes": [%s]
                           }
                         }
                         """.formatted(
+                        agentId,
                         userId,
                         String.join(",", List.of(permissionPointCodes).stream()
-                                .map(code -> "{\"code\":\"" + code + "\",\"displayNameZh\":\"demo\"}")
+                                .map(code -> "\"" + code + "\"")
                                 .toList())
                 )).getBytes(StandardCharsets.UTF_8));
         return header + "." + payload + ".";

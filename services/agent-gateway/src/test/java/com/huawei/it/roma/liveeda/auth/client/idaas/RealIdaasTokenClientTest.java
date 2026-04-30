@@ -20,7 +20,6 @@ import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -89,10 +88,7 @@ class RealIdaasTokenClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         RealIdaasTokenClient client = new RealIdaasTokenClient(builder, idaasProperties());
-        String tc = tcJwt(List.of(Map.of(
-                "code", "erp:contract:r",
-                "displayNameZh", "ERP contract read permission"
-        )));
+        String tc = tcJwt(List.of("erp:contract:r"));
 
         expectUserInfo(server, tc);
 
@@ -103,8 +99,7 @@ class RealIdaasTokenClientTest {
 
         assertEquals("Y30037812", result.userId());
         assertEquals("erp:contract:r", result.authorizedPermissionPoints().getFirst().code());
-        assertEquals("ERP contract read permission",
-                result.authorizedPermissionPoints().getFirst().displayNameZh());
+        assertEquals("erp:contract:r", result.authorizedPermissionPoints().getFirst().displayNameZh());
         server.verify();
     }
 
@@ -148,7 +143,7 @@ class RealIdaasTokenClientTest {
                         """, MediaType.APPLICATION_JSON));
     }
 
-    private String tcJwt(List<Map<String, String>> consentedScopes) {
+    private String tcJwt(List<String> consentedScopes) {
         return JWT.create()
                 .withIssuer("idaas")
                 .withSubject("Y30037812")

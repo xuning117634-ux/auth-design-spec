@@ -1,12 +1,9 @@
 package com.huawei.it.roma.liveeda.demoagent.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.demoagent.client.PolicyCenterClient.ResolveByCodesResult;
 import com.huawei.it.roma.liveeda.demoagent.config.DemoAgentProperties;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,10 +34,10 @@ public class RealMcpGatewayClient implements McpGatewayClient {
 
     @Override
     public Set<String> resolveCoveredTools(String trToken) {
-        DecodedTrContext trContext = decodeTrToken(trToken);
+        TrTokenParser.DecodedTrContext trContext = decodeTrToken(trToken);
         ResolveByCodesResult resolution = policyCenterClient.resolveByCodes(trContext.authorizedPermissionPointCodes());
         if (resolution == null || resolution.tools() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "策略中心未返回 TR 对应的工具集合");
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Policy center returned empty tools for TR");
         }
         return resolution.tools().stream()
                 .map(PolicyCenterClient.ToolView::toolId)
@@ -49,13 +46,17 @@ public class RealMcpGatewayClient implements McpGatewayClient {
 
     @Override
     public String invoke(String agentId, String trToken, Set<String> requiredTools, String message) {
+        TrTokenParser.DecodedTrContext trContext = decodeTrToken(trToken);
+        if (!agentId.equals(trContext.agentId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "TR agent does not match request agent");
+        }
         RestClient restClient = restClientBuilder.baseUrl(properties.getMcp().getGatewayBaseUrl()).build();
         InvokeResponse response = post(restClient)
                 .body(new InvokeRequest(agentId, trToken, requiredTools.stream().sorted().toList(), message))
                 .retrieve()
                 .body(InvokeResponse.class);
         if (response == null || !"SUCCESS".equalsIgnoreCase(response.status()) || isBlank(response.answer())) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "真实 MCP 网关未返回可用结果");
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Real MCP gateway returned empty result");
         }
         return response.answer();
     }
@@ -70,27 +71,12 @@ public class RealMcpGatewayClient implements McpGatewayClient {
         return request;
     }
 
-    private DecodedTrContext decodeTrToken(String trToken) {
+    private TrTokenParser.DecodedTrContext decodeTrToken(String trToken) {
         try {
-            String[] parts = trToken.split("\\.");
-            if (parts.length < 2) {
-                throw new IllegalArgumentException("Invalid JWT format");
-            }
-            byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]);
-            JsonNode payload = objectMapper.readTree(new String(payloadBytes, StandardCharsets.UTF_8));
-            JsonNode consentedScopes = payload.path("agency_user").path("consented_scopes");
-            Set<String> permissionPointCodes = new LinkedHashSet<>();
-            if (consentedScopes.isArray()) {
-                consentedScopes.forEach(node -> {
-                    String code = node.path("code").asText();
-                    if (!code.isBlank()) {
-                        permissionPointCodes.add(code);
-                    }
-                });
-            }
-            return new DecodedTrContext(permissionPointCodes);
+            return new TrTokenParser(objectMapper).decode(trToken);
         } catch (Exception exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "当前资源令牌不可解析，无法调用真实 MCP 网关", exception);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "TR cannot be parsed for real MCP gateway invocation", exception);
         }
     }
 
@@ -110,8 +96,5 @@ public class RealMcpGatewayClient implements McpGatewayClient {
             String status,
             String answer
     ) {
-    }
-
-    private record DecodedTrContext(Set<String> authorizedPermissionPointCodes) {
     }
 }

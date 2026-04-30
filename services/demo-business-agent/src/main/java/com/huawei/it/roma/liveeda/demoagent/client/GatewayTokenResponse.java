@@ -9,7 +9,7 @@ public record GatewayTokenResponse(
         String redirectUrl,
         String requestId,
         AgencyUser agencyUser,
-        List<ConsentedScope> consentedScopes
+        List<String> consentedScopes
 ) {
     public GatewayTokenResponse(String accessToken, Long expiresIn, String status, String redirectUrl, String requestId) {
         this(accessToken, expiresIn, status, redirectUrl, requestId, null, List.of());
@@ -33,9 +33,4 @@ public record GatewayTokenResponse(
         }
     }
 
-    public record ConsentedScope(
-            String code,
-            String displayNameZh
-    ) {
-    }
 }

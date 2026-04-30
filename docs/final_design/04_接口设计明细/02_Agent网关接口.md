@@ -347,10 +347,7 @@ Content-Type: application/json
     "global_user_id": "z01062668"
   },
   "consented_scopes": [
-    {
-      "code": "erp:contract:r",
-      "displayNameZh": "ERP 合同的可读权限"
-    }
+    "erp:contract:r"
   ]
 }
 ```
