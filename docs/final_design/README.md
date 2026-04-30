@@ -1,6 +1,6 @@
 # final_design 阅读索引
 
-本目录是当前正式设计的唯一入口。`01_无Agent网关版方案.md` 仅作参考；当前正式方案以 `02/03/04/05` 为主。
+本目录是当前正式设计的入口。`01_无Agent网关版方案.md` 仅作参考；当前正式方案以 `02/03/04/05` 和接口明细文档为准。
 
 ## 推荐阅读路径
 
@@ -9,18 +9,49 @@
 | 5 分钟理解主线 | [00_当前方案速记.md](./00_当前方案速记.md) |
 | 理解整体架构和模式 A | [02_引入Agent网关版方案.md](./02_引入Agent网关版方案.md) |
 | 理解 `Tc / T1 / TR` | [03_令牌设计.md](./03_令牌设计.md) |
-| 查接口 | [04_接口设计.md](./04_接口设计.md) |
+| 查接口总览 | [04_接口设计.md](./04_接口设计.md) |
+| 查接口明细 | [04_接口设计明细](./04_接口设计明细/README.md) |
 | 查策略中心模型 | [05_策略中心设计.md](./05_策略中心设计.md) |
 | 开会解释流程箭头 | [06_时序图逐箭头说明.md](./06_时序图逐箭头说明.md) |
+| 给领导讲主流程 | [07_登录鉴权流程领导讲解版.md](./07_登录鉴权流程领导讲解版.md) |
 | AI 快速载入上下文 | [quick_read](./quick_read/README.md) |
+| 查看最近设计口径变化 | [CHANGELOG.md](./CHANGELOG.md) |
 
-## 轻拆分说明
+## 文件职责
 
-为了避免单个文档过长，流程细节拆到 `flow_details`：
+| 文件 | 职责 |
+| --- | --- |
+| `00_当前方案速记.md` | 当前方案的极简入口，适合快速同步和会议前复习。 |
+| `02_引入Agent网关版方案.md` | 总体架构、模式 A、登录授权主链路、关键状态和职责边界。 |
+| `03_令牌设计.md` | `Tc / T1 / TR` 的结构、字段来源、解析规则和安全边界。 |
+| `04_接口设计.md` | 接口总览和跨模块调用关系。 |
+| `04_接口设计明细/*` | 各模块接口的请求、响应、错误和示例。 |
+| `05_策略中心设计.md` | 权限点、策略、Agent 订阅关系和 MCP 运行时裁决规则。 |
+| `06_时序图逐箭头说明.md` | 时序图中每个箭头的含义、参数来源和注意事项。 |
+| `07_登录鉴权流程领导讲解版.md` | 面向非实现细节沟通的流程讲解图。 |
+| `flow_details/*` | base 登录、TR 授权、一次性票据安全等流程拆分说明。 |
+| `quick_read/*` | 给人和 AI 快速读取的压缩版文档。 |
 
-- [flow_details/01_base_login_ticketST.md](./flow_details/01_base_login_ticketST.md)：base 登录和 `ticketST`。
-- [flow_details/02_resource_token_ticket.md](./flow_details/02_resource_token_ticket.md)：业务授权、`TR` 获取和 `token_result_ticket`。
-- [flow_details/03_one_time_ticket_security.md](./flow_details/03_one_time_ticket_security.md)：一次性凭据安全约束。
+## 按需读取规则
+
+后续修改代码或文档时，不再默认全量读取 `final_design`。推荐流程：
+
+1. 先读本文件和 [CHANGELOG.md](./CHANGELOG.md)，确认当前正式口径。
+2. 根据本次任务，只打开相关职责文档。
+3. 对跨文档统一字段，优先用全文搜索精准定位旧词，再局部修改。
+4. 如果只是实现细节变化，不影响正式设计口径，可以不改正式设计文档。
+5. 如果影响正式口径，先在 [CHANGELOG.md](./CHANGELOG.md) 追加一条变更摘要，再同步相关文档。
+
+## 常见变更影响范围
+
+| 变更类型 | 通常需要阅读和修改 |
+| --- | --- |
+| 登录流程、`ticketST`、`site_session` | `02`、`04_接口设计明细/02_Agent网关接口.md`、`06`、`flow_details/01_base_login_ticketST.md`、`quick_read/02` |
+| 授权流程、`token_result_ticket`、`TR` 交换 | `02`、`03`、`04_接口设计明细/02_Agent网关接口.md`、`06`、`flow_details/02_resource_token_ticket.md`、`quick_read/02/03` |
+| `consented_scopes`、`agency_user`、`aud` | `03`、`04_接口设计明细/04_MCP网关接口.md`、`04_接口设计明细/05_外部依赖接口.md`、`quick_read/03` |
+| 策略中心权限点、策略、Agent 订阅 | `05`、`04_接口设计明细/03_策略中心接口.md`、`00`、`quick_read/04` |
+| 外部 IDaaS/IAM 接口签名 | `04_接口设计明细/05_外部依赖接口.md`、`03`、必要时同步 `02/06` |
+| Demo 演示体验 | 通常不改正式设计；如影响链路语义，再同步 `00/02/06` |
 
 ## 当前正式口径
 
@@ -30,4 +61,6 @@
 - base 登录结果通过 `ticketST` 后端交换。
 - 授权结果通过 `token_result_ticket` 后端交换。
 - 浏览器 URL 不携带 `Tc`、`TR`、用户信息。
-- 令牌中的授权范围字段继续使用 `consented_scopes`。
+- `TR.agency_user.consented_scopes` 使用权限点 code 字符串数组。
+- `TR.scope` 仅作为预留字段，不作为运行时鉴权依据。
+- MCP 运行时从 `TR.aud` 读取业务 Agent ID，从 `TR.agency_user.user.uid` 读取用户 ID。
