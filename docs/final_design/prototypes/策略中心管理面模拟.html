@@ -578,8 +578,8 @@
 
           <div class="card">
             <div class="card-head">
-              <h2>能力范围</h2>
-              <span class="pill blue">当前 Agent 自动带入</span>
+              <h2>能力清单</h2>
+              <span class="pill blue">只读概览</span>
             </div>
             <div class="card-body">
               <div class="chips" id="capabilityChips"></div>
@@ -628,6 +628,14 @@
                 </div>
                 <div class="row">
                   <label>
+                    Action（由入口自动确定）
+                    <select id="action" disabled>
+                      <option value="agent.access">agent.access</option>
+                      <option value="skill.invoke">skill.invoke</option>
+                      <option value="permissionPoint.use">permissionPoint.use</option>
+                    </select>
+                  </label>
+                  <label>
                     资源类型
                     <select id="resourceType" disabled>
                       <option value="AGENT">AGENT</option>
@@ -640,14 +648,6 @@
                     <select id="resourceId"></select>
                   </label>
                 </div>
-                <label>
-                  Action
-                  <select id="action" disabled>
-                    <option value="agent.access">agent.access</option>
-                    <option value="skill.invoke">skill.invoke</option>
-                    <option value="permissionPoint.use">permissionPoint.use</option>
-                  </select>
-                </label>
               </div>
 
               <pre class="preview" id="preview"></pre>
@@ -708,8 +708,8 @@
               <thead>
                 <tr>
                   <th>策略名称</th>
-                  <th>资源</th>
                   <th>动作</th>
+                  <th>资源</th>
                   <th>主体</th>
                   <th>效果</th>
                 </tr>
@@ -894,11 +894,11 @@
         policyName: $("policyName").value.trim(),
         enterprise: "11111111111111111111111111111111",
         subject: subjectValue(),
+        action: $("action").value,
         resource: {
           type: $("resourceType").value,
           id: $("resourceId").value
         },
-        action: $("action").value,
         context: {
           agentId: currentAgent.id
         },
@@ -920,8 +920,8 @@
       $("policyTable").innerHTML = rows.map(policy => `
         <tr>
           <td>${policy.policyName}</td>
-          <td><span class="code">${policy.resource.type}:${policy.resource.id}</span></td>
           <td><span class="code">${policy.action}</span></td>
+          <td><span class="code">${policy.resource.type}:${policy.resource.id}</span></td>
           <td><span class="code">${policy.subject.type}</span></td>
           <td><span class="pill ${policy.effect === "DENY" ? "deny" : "allow"}">${policy.effect}</span></td>
         </tr>
