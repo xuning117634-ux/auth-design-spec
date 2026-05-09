@@ -325,6 +325,11 @@
       font-size: 13px;
     }
 
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     .btn.primary {
       color: #fff;
       background: var(--brand);
@@ -589,8 +594,6 @@
               <button class="tab active" data-tab="access">访问控制</button>
               <button class="tab" data-tab="skill">Skill 控制</button>
               <button class="tab" data-tab="permission">权限点控制</button>
-              <button class="tab" data-tab="ability">能力边界</button>
-              <button class="tab" data-tab="test">策略测试</button>
             </div>
           </div>
           <div class="card-body">
@@ -616,7 +619,6 @@
                       <option value="USER">指定用户</option>
                       <option value="USER_GROUP">用户组</option>
                       <option value="USER_ATTRIBUTE">用户属性</option>
-                      <option value="AGENT">当前 Agent</option>
                     </select>
                   </label>
                   <label>
@@ -650,8 +652,16 @@
 
               <pre class="preview" id="preview"></pre>
             </div>
+          </div>
+        </section>
 
-            <div id="testWorkspace" class="test-grid" style="display: none;">
+        <section class="card">
+          <div class="card-head">
+            <h2>策略测试</h2>
+            <span class="pill blue">独立验证工具</span>
+          </div>
+          <div class="card-body">
+            <div id="testWorkspace" class="test-grid">
               <div class="form">
                 <div class="row">
                   <label>
@@ -811,7 +821,7 @@
     function resourceOptions() {
       if (currentTab === "access") {
         $("resourceId").innerHTML = `<option value="${currentAgent.id}">${currentAgent.name} (${currentAgent.id})</option>`;
-      } else if (currentTab === "skill" || currentTab === "ability") {
+      } else if (currentTab === "skill") {
         $("resourceId").innerHTML = currentAgent.skills
           .map(item => `<option value="${item.id}">${item.name} (${item.id})</option>`)
           .join("");
@@ -848,14 +858,6 @@
           resourceType: "PERMISSION_POINT",
           action: "permissionPoint.use"
         },
-        ability: {
-          name: `${currentAgent.name}-允许调用 Skill`,
-          effect: "PERMIT",
-          subjectType: "AGENT",
-          subjectValue: currentAgent.id,
-          resourceType: "SKILL",
-          action: "skill.invoke"
-        }
       };
 
       const preset = presets[currentTab] || presets.access;
@@ -1004,17 +1006,13 @@
     }
 
     function switchTab(tab) {
+      if (!["access", "skill", "permission"].includes(tab)) {
+        tab = "access";
+      }
       currentTab = tab;
       document.querySelectorAll("#tabs .tab").forEach(item => item.classList.toggle("active", item.dataset.tab === tab));
-      const isTest = tab === "test";
-      $("policyWorkspace").style.display = isTest ? "none" : "grid";
-      $("testWorkspace").style.display = isTest ? "grid" : "none";
-      if (isTest) {
-        updateTestResourceOptions();
-        runTest();
-      } else {
-        applyTab();
-      }
+      $("savePolicy").disabled = false;
+      applyTab();
     }
 
     function loadDemoPolicies() {
@@ -1066,6 +1064,8 @@
       renderAgentSummary();
       renderPolicyTable();
       switchTab(currentTab);
+      updateTestResourceOptions();
+      runTest();
     }
 
     function init() {
