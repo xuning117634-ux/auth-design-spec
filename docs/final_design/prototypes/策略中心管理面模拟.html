@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent 权限管理</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --line: #e5eaf0;
+      --line-strong: #d7dee8;
+      --text: #16202a;
+      --muted: #667789;
+      --brand: #166534;
+      --brand-soft: #e8f5ee;
+      --red: #c2413a;
+      --red-soft: #fff1f0;
+      --blue: #2563eb;
+      --blue-soft: #edf4ff;
+      --amber: #a16207;
+      --amber-soft: #fff7df;
+      --shadow: 0 12px 30px rgba(22, 32, 42, 0.08);
+      --radius: 14px;
+      --mono: "Cascadia Code", Consolas, monospace;
+      --sans: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: var(--sans);
+      background: var(--bg);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      min-height: 100vh;
+    }
+
+    .agent-pane {
+      border-right: 1px solid var(--line);
+      background: #101827;
+      color: #eaf0f7;
+      padding: 20px 16px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+      padding: 0 8px;
+    }
+
+    .logo-mark {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border-radius: 11px;
+      background: linear-gradient(135deg, #22c55e, #15803d);
+      color: #fff;
+      font-weight: 900;
+    }
+
+    .logo strong {
+      display: block;
+      font-size: 16px;
+    }
+
+    .logo span {
+      display: block;
+      margin-top: 2px;
+      color: #9fb0c5;
+      font-size: 12px;
+    }
+
+    .agent-search {
+      margin-bottom: 14px;
+      padding: 0 4px;
+    }
+
+    .agent-search input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+      outline: none;
+    }
+
+    .agent-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .agent-item {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 13px;
+      padding: 13px;
+      color: #d7e1ee;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .agent-item.active {
+      border-color: rgba(34, 197, 94, 0.28);
+      background: rgba(34, 197, 94, 0.14);
+      color: #fff;
+    }
+
+    .agent-item strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+
+    .agent-item span {
+      display: block;
+      color: #9fb0c5;
+      font-family: var(--mono);
+      font-size: 11px;
+      word-break: break-all;
+    }
+
+    .agent-item .meta {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .main {
+      min-width: 0;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-height: 66px;
+      padding: 14px 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    .title h1 {
+      margin: 0 0 4px;
+      font-size: 21px;
+    }
+
+    .title span {
+      color: var(--muted);
+      font-size: 13px;
+      font-family: var(--mono);
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .content {
+      padding: 22px 28px 36px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+    }
+
+    .card {
+      min-width: 0;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .card-head h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .card-body {
+      padding: 18px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .stat {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcfd;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 7px;
+      font-size: 24px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip,
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 9px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .chip {
+      color: #415063;
+      background: #f2f5f8;
+      font-family: var(--mono);
+    }
+
+    .pill.open,
+    .pill.allow {
+      color: var(--brand);
+      background: var(--brand-soft);
+    }
+
+    .pill.restricted,
+    .pill.warn {
+      color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .pill.deny {
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .pill.blue {
+      color: var(--blue);
+      background: var(--blue-soft);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: var(--muted);
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .tab.active {
+      color: var(--brand);
+      border-color: #b7e1c7;
+      background: var(--brand-soft);
+    }
+
+    .btn {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 9px 13px;
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .btn.primary {
+      color: #fff;
+      background: var(--brand);
+    }
+
+    .btn.secondary {
+      border-color: var(--line-strong);
+    }
+
+    .btn.danger {
+      color: var(--red);
+      border-color: #f2c7c2;
+      background: var(--red-soft);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1fr 0.9fr;
+      gap: 18px;
+    }
+
+    .form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: #86c99c;
+      box-shadow: 0 0 0 3px rgba(22, 101, 52, 0.12);
+    }
+
+    .preview {
+      margin: 0;
+      min-height: 246px;
+      max-height: 360px;
+      overflow: auto;
+      border-radius: 12px;
+      padding: 14px;
+      background: #111827;
+      color: #e5eef8;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+    }
+
+    .table-wrap {
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      background: #fbfcfd;
+      font-weight: 900;
+    }
+
+    .code {
+      color: #415063;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .test-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .result {
+      display: grid;
+      gap: 10px;
+      border-radius: 12px;
+      padding: 16px;
+      background: #f9fbfd;
+      border: 1px solid var(--line);
+    }
+
+    .result.allow {
+      background: var(--brand-soft);
+      border-color: #b7e1c7;
+    }
+
+    .result.deny {
+      background: var(--red-soft);
+      border-color: #f2c7c2;
+    }
+
+    .result-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .empty {
+      padding: 18px;
+      text-align: center;
+      color: var(--muted);
+      background: #fbfcfd;
+      border: 1px dashed var(--line-strong);
+      border-radius: 12px;
+    }
+
+    @media (max-width: 1180px) {
+      .app,
+      .summary,
+      .workspace,
+      .test-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .agent-pane {
+        display: none;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .content {
+        padding: 16px;
+      }
+
+      .row,
+      .stats {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="agent-pane">
+      <div class="logo">
+        <div class="logo-mark">PC</div>
+        <div>
+          <strong>Agent 权限管理</strong>
+          <span>Policy Center</span>
+        </div>
+      </div>
+
+      <div class="agent-search">
+        <input id="agentSearch" placeholder="搜索 Agent">
+      </div>
+
+      <div class="agent-list" id="agentList"></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="title">
+          <h1 id="agentTitle">合同助手</h1>
+          <span id="agentSubtitle">contract_agent_001</span>
+        </div>
+        <div class="toolbar">
+          <button class="btn secondary" id="loadDemo">加载示例</button>
+          <button class="btn primary" id="savePolicy">保存策略</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <section class="summary">
+          <div class="card">
+            <div class="card-head">
+              <h2>当前 Agent</h2>
+              <span class="pill open" id="agentMode">OPEN</span>
+            </div>
+            <div class="card-body">
+              <div class="stats">
+                <div class="stat">
+                  <span>已启用 Skill</span>
+                  <strong id="skillCount">0</strong>
+                </div>
+                <div class="stat">
+                  <span>订阅权限点</span>
+                  <strong id="permissionCount">0</strong>
+                </div>
+                <div class="stat">
+                  <span>策略</span>
+                  <strong id="policyCount">0</strong>
+                </div>
+                <div class="stat">
+                  <span>访问模式</span>
+                  <strong id="accessModeText">OPEN</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>能力范围</h2>
+              <span class="pill blue">当前 Agent 自动带入</span>
+            </div>
+            <div class="card-body">
+              <div class="chips" id="capabilityChips"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>策略配置</h2>
+            <div class="tabs" id="tabs">
+              <button class="tab active" data-tab="access">访问控制</button>
+              <button class="tab" data-tab="skill">Skill 控制</button>
+              <button class="tab" data-tab="permission">权限点控制</button>
+              <button class="tab" data-tab="ability">能力边界</button>
+              <button class="tab" data-tab="test">策略测试</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="policyWorkspace" class="workspace">
+              <div class="form">
+                <div class="row">
+                  <label>
+                    策略名称
+                    <input id="policyName">
+                  </label>
+                  <label>
+                    Effect
+                    <select id="effect">
+                      <option value="DENY">DENY</option>
+                      <option value="PERMIT">PERMIT</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>
+                    主体类型
+                    <select id="subjectType">
+                      <option value="USER">指定用户</option>
+                      <option value="USER_GROUP">用户组</option>
+                      <option value="USER_ATTRIBUTE">用户属性</option>
+                      <option value="AGENT">当前 Agent</option>
+                    </select>
+                  </label>
+                  <label>
+                    主体
+                    <input id="subjectValue">
+                  </label>
+                </div>
+                <div class="row">
+                  <label>
+                    资源类型
+                    <select id="resourceType" disabled>
+                      <option value="AGENT">AGENT</option>
+                      <option value="SKILL">SKILL</option>
+                      <option value="PERMISSION_POINT">PERMISSION_POINT</option>
+                    </select>
+                  </label>
+                  <label>
+                    资源
+                    <select id="resourceId"></select>
+                  </label>
+                </div>
+                <label>
+                  Action
+                  <select id="action" disabled>
+                    <option value="agent.access">agent.access</option>
+                    <option value="skill.invoke">skill.invoke</option>
+                    <option value="permissionPoint.use">permissionPoint.use</option>
+                  </select>
+                </label>
+              </div>
+
+              <pre class="preview" id="preview"></pre>
+            </div>
+
+            <div id="testWorkspace" class="test-grid" style="display: none;">
+              <div class="form">
+                <div class="row">
+                  <label>
+                    用户
+                    <select id="testUser">
+                      <option value="regular">杨程义 / 正式员工 / 财务组</option>
+                      <option value="outsourcing">李外包 / 外包</option>
+                      <option value="blocked">Y30037812 / 受限用户</option>
+                    </select>
+                  </label>
+                  <label>
+                    测试类型
+                    <select id="testType">
+                      <option value="access">访问当前 Agent</option>
+                      <option value="skill">使用 Skill</option>
+                      <option value="permission">使用权限点</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  目标资源
+                  <select id="testResource"></select>
+                </label>
+                <button class="btn primary" id="runTest">运行测试</button>
+              </div>
+              <div class="result" id="resultBox">
+                <div class="result-title">
+                  <span>等待测试</span>
+                  <span class="pill warn">READY</span>
+                </div>
+                <div class="muted">当前 Agent 会自动作为 context.agentId 带入。</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>当前 Agent 策略列表</h2>
+            <button class="btn danger" id="clearPolicies">清空当前 Agent 策略</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>策略名称</th>
+                  <th>资源</th>
+                  <th>动作</th>
+                  <th>主体</th>
+                  <th>效果</th>
+                </tr>
+              </thead>
+              <tbody id="policyTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const agents = [
+      {
+        id: "contract_agent_001",
+        name: "合同助手",
+        appId: "app.erp.contract",
+        mode: "OPEN",
+        skills: [
+          { id: "contract_summary", name: "合同总结" },
+          { id: "contract_risk_check", name: "合同风险识别" }
+        ],
+        permissionPoints: [
+          { id: "erp:contract:r", name: "ERP 合同可读" },
+          { id: "erp:invoice:r", name: "ERP 发票可读" }
+        ]
+      },
+      {
+        id: "invoice_agent_001",
+        name: "发票助手",
+        appId: "app.erp.invoice",
+        mode: "RESTRICTED",
+        skills: [
+          { id: "invoice_check", name: "发票校验" },
+          { id: "invoice_match", name: "发票匹配" }
+        ],
+        permissionPoints: [
+          { id: "erp:invoice:r", name: "ERP 发票可读" }
+        ]
+      },
+      {
+        id: "report_agent_001",
+        name: "报表助手",
+        appId: "app.erp.report",
+        mode: "OPEN",
+        skills: [
+          { id: "report_analysis", name: "报表分析" }
+        ],
+        permissionPoints: [
+          { id: "erp:report:r", name: "ERP 报表可读" }
+        ]
+      }
+    ];
+
+    const users = {
+      regular: { id: "Y30030001", name: "杨程义", employeeType: "REGULAR", groups: ["finance_group"] },
+      outsourcing: { id: "W10001", name: "李外包", employeeType: "WX", groups: [] },
+      blocked: { id: "Y30037812", name: "受限用户", employeeType: "REGULAR", groups: [] }
+    };
+
+    let currentAgent = agents[0];
+    let currentTab = "access";
+    let policies = [];
+    const $ = id => document.getElementById(id);
+
+    function agentPolicies() {
+      return policies.filter(policy => policy.context.agentId === currentAgent.id || policy.resource.id === currentAgent.id);
+    }
+
+    function renderAgentList() {
+      const keyword = $("agentSearch").value.trim().toLowerCase();
+      $("agentList").innerHTML = agents
+        .filter(agent => !keyword || agent.name.toLowerCase().includes(keyword) || agent.id.toLowerCase().includes(keyword))
+        .map(agent => `
+          <button class="agent-item ${agent.id === currentAgent.id ? "active" : ""}" data-agent="${agent.id}">
+            <strong>${agent.name}</strong>
+            <span>${agent.id}</span>
+            <div class="meta">
+              <span class="pill ${agent.mode === "OPEN" ? "open" : "restricted"}">${agent.mode}</span>
+              <span class="pill blue">${agent.skills.length} Skills</span>
+            </div>
+          </button>
+        `).join("");
+      document.querySelectorAll(".agent-item").forEach(item => {
+        item.addEventListener("click", () => {
+          currentAgent = agents.find(agent => agent.id === item.dataset.agent);
+          currentTab = "access";
+          renderAll();
+        });
+      });
+    }
+
+    function renderAgentSummary() {
+      $("agentTitle").textContent = currentAgent.name;
+      $("agentSubtitle").textContent = `${currentAgent.id} / ${currentAgent.appId}`;
+      $("agentMode").textContent = currentAgent.mode;
+      $("agentMode").className = `pill ${currentAgent.mode === "OPEN" ? "open" : "restricted"}`;
+      $("skillCount").textContent = currentAgent.skills.length;
+      $("permissionCount").textContent = currentAgent.permissionPoints.length;
+      $("policyCount").textContent = agentPolicies().length;
+      $("accessModeText").textContent = currentAgent.mode;
+      $("capabilityChips").innerHTML = [
+        ...currentAgent.skills.map(item => `<span class="chip">SKILL:${item.id}</span>`),
+        ...currentAgent.permissionPoints.map(item => `<span class="chip">PP:${item.id}</span>`)
+      ].join("");
+    }
+
+    function resourceOptions() {
+      if (currentTab === "access") {
+        $("resourceId").innerHTML = `<option value="${currentAgent.id}">${currentAgent.name} (${currentAgent.id})</option>`;
+      } else if (currentTab === "skill" || currentTab === "ability") {
+        $("resourceId").innerHTML = currentAgent.skills
+          .map(item => `<option value="${item.id}">${item.name} (${item.id})</option>`)
+          .join("");
+      } else {
+        $("resourceId").innerHTML = currentAgent.permissionPoints
+          .map(item => `<option value="${item.id}">${item.name} (${item.id})</option>`)
+          .join("");
+      }
+    }
+
+    function applyTab() {
+      const presets = {
+        access: {
+          name: `${currentAgent.name}-禁止外包访问`,
+          effect: "DENY",
+          subjectType: "USER_ATTRIBUTE",
+          subjectValue: "employeeType=WX",
+          resourceType: "AGENT",
+          action: "agent.access"
+        },
+        skill: {
+          name: `${currentAgent.name}-正式员工可用 Skill`,
+          effect: "PERMIT",
+          subjectType: "USER_ATTRIBUTE",
+          subjectValue: "employeeType=REGULAR",
+          resourceType: "SKILL",
+          action: "skill.invoke"
+        },
+        permission: {
+          name: `${currentAgent.name}-限制权限点使用`,
+          effect: "DENY",
+          subjectType: "USER",
+          subjectValue: "Y30037812",
+          resourceType: "PERMISSION_POINT",
+          action: "permissionPoint.use"
+        },
+        ability: {
+          name: `${currentAgent.name}-允许调用 Skill`,
+          effect: "PERMIT",
+          subjectType: "AGENT",
+          subjectValue: currentAgent.id,
+          resourceType: "SKILL",
+          action: "skill.invoke"
+        }
+      };
+
+      const preset = presets[currentTab] || presets.access;
+      $("policyName").value = preset.name;
+      $("effect").value = preset.effect;
+      $("subjectType").value = preset.subjectType;
+      $("subjectValue").value = preset.subjectValue;
+      $("resourceType").value = preset.resourceType;
+      $("action").value = preset.action;
+      resourceOptions();
+      preview();
+    }
+
+    function subjectValue() {
+      const type = $("subjectType").value;
+      const value = $("subjectValue").value.trim();
+      if (type === "USER_ATTRIBUTE") {
+        const [field, attrValue] = value.split("=");
+        return {
+          type: "USER",
+          selector: {
+            field: `subject.${field || "employeeType"}`,
+            operator: "equals",
+            values: [attrValue || ""]
+          }
+        };
+      }
+      return { type, id: value };
+    }
+
+    function currentPolicy() {
+      return {
+        policyId: `pol_${Date.now()}`,
+        policyName: $("policyName").value.trim(),
+        enterprise: "11111111111111111111111111111111",
+        subject: subjectValue(),
+        resource: {
+          type: $("resourceType").value,
+          id: $("resourceId").value
+        },
+        action: $("action").value,
+        context: {
+          agentId: currentAgent.id
+        },
+        effect: $("effect").value,
+        status: "ACTIVE"
+      };
+    }
+
+    function preview() {
+      $("preview").textContent = JSON.stringify(currentPolicy(), null, 2);
+    }
+
+    function renderPolicyTable() {
+      const rows = agentPolicies();
+      if (!rows.length) {
+        $("policyTable").innerHTML = `<tr><td colspan="5"><div class="empty">当前 Agent 暂无策略</div></td></tr>`;
+        return;
+      }
+      $("policyTable").innerHTML = rows.map(policy => `
+        <tr>
+          <td>${policy.policyName}</td>
+          <td><span class="code">${policy.resource.type}:${policy.resource.id}</span></td>
+          <td><span class="code">${policy.action}</span></td>
+          <td><span class="code">${policy.subject.type}</span></td>
+          <td><span class="pill ${policy.effect === "DENY" ? "deny" : "allow"}">${policy.effect}</span></td>
+        </tr>
+      `).join("");
+    }
+
+    function matchSubject(policySubject, user) {
+      if (policySubject.type === "USER" && policySubject.id) {
+        return policySubject.id === user.id;
+      }
+      if (policySubject.type === "USER" && policySubject.selector) {
+        const field = policySubject.selector.field.replace("subject.", "");
+        return policySubject.selector.values.includes(String(user[field] || ""));
+      }
+      if (policySubject.type === "USER_GROUP") {
+        return user.groups.includes(policySubject.id);
+      }
+      return false;
+    }
+
+    function matchPolicy(policy, test, user) {
+      return policy.context.agentId === currentAgent.id
+        && policy.resource.type === test.resourceType
+        && policy.resource.id === test.resourceId
+        && policy.action === test.action
+        && matchSubject(policy.subject, user);
+    }
+
+    function runTest() {
+      const user = users[$("testUser").value];
+      const type = $("testType").value;
+      const resourceType = type === "access" ? "AGENT" : type === "skill" ? "SKILL" : "PERMISSION_POINT";
+      const action = type === "access" ? "agent.access" : type === "skill" ? "skill.invoke" : "permissionPoint.use";
+      const resourceId = type === "access" ? currentAgent.id : $("testResource").value;
+      const test = { resourceType, resourceId, action };
+      const matched = policies.filter(policy => matchPolicy(policy, test, user));
+      const deny = matched.find(policy => policy.effect === "DENY");
+      const permit = matched.find(policy => policy.effect === "PERMIT");
+      const resourceMode = type === "access" ? currentAgent.mode : "OPEN";
+      let decision = "ALLOW";
+      let reason = "默认开放，未命中拒绝策略。";
+
+      if (deny) {
+        decision = "DENY";
+        reason = `命中拒绝策略：${deny.policyName}`;
+      } else if (resourceMode === "RESTRICTED" && !permit) {
+        decision = "DENY";
+        reason = "当前 Agent 为 RESTRICTED，未命中允许策略。";
+      } else if (permit) {
+        reason = `命中允许策略：${permit.policyName}`;
+      }
+
+      $("resultBox").className = `result ${decision === "ALLOW" ? "allow" : "deny"}`;
+      $("resultBox").innerHTML = `
+        <div class="result-title">
+          <span>${decision}</span>
+          <span class="pill ${decision === "ALLOW" ? "allow" : "deny"}">${decision === "ALLOW" ? "允许" : "拒绝"}</span>
+        </div>
+        <div class="muted">Agent：${currentAgent.name} (${currentAgent.id})</div>
+        <div class="muted">用户：${user.name} (${user.id})</div>
+        <div class="muted">资源：${resourceType}:${resourceId}</div>
+        <div class="muted">原因：${reason}</div>
+      `;
+    }
+
+    function updateTestResourceOptions() {
+      const type = $("testType").value;
+      if (type === "access") {
+        $("testResource").innerHTML = `<option value="${currentAgent.id}">${currentAgent.name} (${currentAgent.id})</option>`;
+        $("testResource").disabled = true;
+      } else if (type === "skill") {
+        $("testResource").disabled = false;
+        $("testResource").innerHTML = currentAgent.skills
+          .map(item => `<option value="${item.id}">${item.name} (${item.id})</option>`)
+          .join("");
+      } else {
+        $("testResource").disabled = false;
+        $("testResource").innerHTML = currentAgent.permissionPoints
+          .map(item => `<option value="${item.id}">${item.name} (${item.id})</option>`)
+          .join("");
+      }
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll("#tabs .tab").forEach(item => item.classList.toggle("active", item.dataset.tab === tab));
+      const isTest = tab === "test";
+      $("policyWorkspace").style.display = isTest ? "none" : "grid";
+      $("testWorkspace").style.display = isTest ? "grid" : "none";
+      if (isTest) {
+        updateTestResourceOptions();
+        runTest();
+      } else {
+        applyTab();
+      }
+    }
+
+    function loadDemoPolicies() {
+      policies = policies.filter(policy => policy.context.agentId !== currentAgent.id);
+      const demo = [
+        { tab: "access", effect: "DENY", subjectType: "USER_ATTRIBUTE", subjectValue: "employeeType=WX" },
+        { tab: "permission", effect: "DENY", subjectType: "USER", subjectValue: "Y30037812" }
+      ];
+      demo.forEach(item => {
+        currentTab = item.tab;
+        applyTab();
+        $("effect").value = item.effect;
+        $("subjectType").value = item.subjectType;
+        $("subjectValue").value = item.subjectValue;
+        policies.unshift(currentPolicy());
+      });
+      currentTab = "access";
+      renderAll();
+    }
+
+    function bind() {
+      $("agentSearch").addEventListener("input", renderAgentList);
+      document.querySelectorAll("#tabs .tab").forEach(tab => {
+        tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+      });
+      ["policyName", "effect", "subjectType", "subjectValue", "resourceId"].forEach(id => {
+        $(id).addEventListener("input", preview);
+      });
+      $("savePolicy").addEventListener("click", () => {
+        policies.unshift(currentPolicy());
+        renderAll();
+      });
+      $("loadDemo").addEventListener("click", loadDemoPolicies);
+      $("clearPolicies").addEventListener("click", () => {
+        policies = policies.filter(policy => policy.context.agentId !== currentAgent.id);
+        renderAll();
+      });
+      $("testType").addEventListener("change", () => {
+        updateTestResourceOptions();
+        runTest();
+      });
+      $("testUser").addEventListener("change", runTest);
+      $("testResource").addEventListener("change", runTest);
+      $("runTest").addEventListener("click", runTest);
+    }
+
+    function renderAll() {
+      renderAgentList();
+      renderAgentSummary();
+      renderPolicyTable();
+      switchTab(currentTab);
+    }
+
+    function init() {
+      bind();
+      renderAll();
+    }
+
+    init();
+  </script>
+</body>
+</html>
