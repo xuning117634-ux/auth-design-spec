@@ -18,8 +18,6 @@
       --red-soft: #fff1f0;
       --blue: #2563eb;
       --blue-soft: #edf4ff;
-      --amber: #a16207;
-      --amber-soft: #fff7df;
       --shadow: 0 12px 30px rgba(22, 32, 42, 0.08);
       --radius: 14px;
       --mono: "Cascadia Code", Consolas, monospace;
@@ -51,10 +49,10 @@
     }
 
     .agent-pane {
-      border-right: 1px solid var(--line);
-      background: #101827;
-      color: #eaf0f7;
       padding: 20px 16px;
+      color: #eaf0f7;
+      background: #101827;
+      border-right: 1px solid var(--line);
     }
 
     .logo {
@@ -71,8 +69,8 @@
       height: 38px;
       place-items: center;
       border-radius: 11px;
-      background: linear-gradient(135deg, #22c55e, #15803d);
       color: #fff;
+      background: linear-gradient(135deg, #22c55e, #15803d);
       font-weight: 900;
     }
 
@@ -122,8 +120,8 @@
 
     .agent-item.active {
       border-color: rgba(34, 197, 94, 0.28);
-      background: rgba(34, 197, 94, 0.14);
       color: #fff;
+      background: rgba(34, 197, 94, 0.14);
     }
 
     .agent-item strong {
@@ -152,6 +150,9 @@
     }
 
     .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -161,9 +162,6 @@
       border-bottom: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(16px);
-      position: sticky;
-      top: 0;
-      z-index: 5;
     }
 
     .title h1 {
@@ -173,27 +171,40 @@
 
     .title span {
       color: var(--muted);
-      font-size: 13px;
       font-family: var(--mono);
+      font-size: 13px;
     }
 
     .toolbar {
       display: flex;
-      gap: 10px;
       align-items: center;
+      gap: 10px;
       flex-wrap: wrap;
     }
 
     .content {
+      display: grid;
+      gap: 18px;
       padding: 22px 28px 36px;
+    }
+
+    .summary,
+    .workspace,
+    .test-grid {
       display: grid;
       gap: 18px;
     }
 
     .summary {
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 18px;
+      grid-template-columns: 1.05fr 0.95fr;
+    }
+
+    .workspace {
+      grid-template-columns: minmax(0, 1fr) 360px;
+    }
+
+    .test-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
     }
 
     .card {
@@ -224,7 +235,7 @@
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
     }
 
@@ -269,18 +280,13 @@
       font-family: var(--mono);
     }
 
-    .pill.open,
+    .pill.permit,
     .pill.allow {
       color: var(--brand);
       background: var(--brand-soft);
     }
 
-    .pill.restricted,
-    .pill.warn {
-      color: var(--amber);
-      background: var(--amber-soft);
-    }
-
+    .pill.forbid,
     .pill.deny {
       color: var(--red);
       background: var(--red-soft);
@@ -318,16 +324,11 @@
       border: 1px solid transparent;
       border-radius: 10px;
       padding: 9px 13px;
-      background: #fff;
       color: var(--text);
+      background: #fff;
       cursor: pointer;
-      font-weight: 800;
       font-size: 13px;
-    }
-
-    .btn:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
+      font-weight: 800;
     }
 
     .btn.primary {
@@ -345,45 +346,23 @@
       background: var(--red-soft);
     }
 
-    .workspace {
-      display: grid;
-      grid-template-columns: 1fr 0.9fr;
-      gap: 18px;
-    }
-
-    .resource-line {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 180px 160px;
-      gap: 10px;
-      align-items: end;
-    }
-
-    .resource-mode-note {
-      min-height: 40px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      padding: 8px 10px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fbfcfd;
-    }
-
-    .resource-mode-note span {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
     .form {
       display: grid;
       gap: 14px;
     }
 
-    .row {
+    .row,
+    .triple {
       display: grid;
-      grid-template-columns: 1fr 1fr;
       gap: 12px;
+    }
+
+    .row {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .triple {
+      grid-template-columns: 1fr 1fr 1fr;
     }
 
     label {
@@ -401,9 +380,53 @@
       border: 1px solid var(--line-strong);
       border-radius: 10px;
       padding: 8px 10px;
-      background: #fff;
       color: var(--text);
+      background: #fff;
       outline: none;
+    }
+
+    select[multiple] {
+      min-height: 126px;
+    }
+
+    .checkbox-list {
+      display: grid;
+      gap: 8px;
+      max-height: 180px;
+      overflow: auto;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 32px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .checkbox-item input {
+      width: 16px;
+      min-height: 16px;
+      accent-color: var(--brand);
+    }
+
+    .readonly-field {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: #415063;
+      background: #fbfcfd;
+      font-family: var(--mono);
+      font-size: 12px;
     }
 
     input:focus,
@@ -412,15 +435,44 @@
       box-shadow: 0 0 0 3px rgba(22, 101, 52, 0.12);
     }
 
+    .side-panel {
+      display: grid;
+      align-content: start;
+      gap: 12px;
+    }
+
+    .side-note {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fbfcfd;
+    }
+
+    .side-note strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .preview-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
     .preview {
       margin: 0;
-      min-height: 246px;
+      min-height: 220px;
       max-height: 360px;
       overflow: auto;
       border-radius: 12px;
       padding: 14px;
-      background: #111827;
       color: #e5eef8;
+      background: #111827;
       font-family: var(--mono);
       font-size: 12px;
       line-height: 1.65;
@@ -442,7 +494,7 @@
       padding: 12px 10px;
       border-bottom: 1px solid var(--line);
       text-align: left;
-      vertical-align: middle;
+      vertical-align: top;
       white-space: nowrap;
     }
 
@@ -452,16 +504,43 @@
       font-weight: 900;
     }
 
+    details {
+      margin-top: 8px;
+    }
+
+    .cedar-details {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fbfcfd;
+    }
+
+    summary {
+      color: var(--blue);
+      cursor: pointer;
+      font-weight: 800;
+    }
+
     .code {
       color: #415063;
       font-family: var(--mono);
       font-size: 12px;
     }
 
-    .test-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px;
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .empty {
+      padding: 18px;
+      color: var(--muted);
+      text-align: center;
+      background: #fbfcfd;
+      border: 1px dashed var(--line-strong);
+      border-radius: 12px;
     }
 
     .result {
@@ -492,52 +571,18 @@
       font-weight: 900;
     }
 
-    .muted {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.6;
-    }
-
-    .empty {
-      padding: 18px;
-      text-align: center;
-      color: var(--muted);
-      background: #fbfcfd;
-      border: 1px dashed var(--line-strong);
-      border-radius: 12px;
-    }
-
     @media (max-width: 1180px) {
       .app,
       .summary,
       .workspace,
-      .resource-line,
-      .test-grid {
+      .test-grid,
+      .row,
+      .triple {
         grid-template-columns: 1fr;
       }
 
       .agent-pane {
         display: none;
-      }
-
-      .stats {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 720px) {
-      .topbar {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .content {
-        padding: 16px;
-      }
-
-      .row,
-      .stats {
-        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -549,7 +594,7 @@
         <div class="logo-mark">PC</div>
         <div>
           <strong>Agent 权限管理</strong>
-          <span>Policy Center</span>
+          <span>Cedar Policy</span>
         </div>
       </div>
 
@@ -576,8 +621,8 @@
         <section class="summary">
           <div class="card">
             <div class="card-head">
-              <h2>当前 Agent</h2>
-              <span class="pill open" id="agentMode">OPEN</span>
+              <h2>正在管理</h2>
+              <span class="pill blue">Cedar 化</span>
             </div>
             <div class="card-body">
               <div class="stats">
@@ -593,36 +638,23 @@
                   <span>策略</span>
                   <strong id="policyCount">0</strong>
                 </div>
-                <div class="stat">
-                  <span>Agent默认</span>
-                  <strong id="accessModeText">OPEN</strong>
-                </div>
               </div>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-head">
-              <h2>能力清单</h2>
-              <span class="pill blue">只读概览</span>
-            </div>
-            <div class="card-body">
-              <div class="chips" id="capabilityChips"></div>
-            </div>
-          </div>
         </section>
 
         <section class="card">
           <div class="card-head">
             <h2>策略配置</h2>
             <div class="tabs" id="tabs">
-              <button class="tab active" data-tab="access">访问控制</button>
-              <button class="tab" data-tab="skill">Skill 控制</button>
-              <button class="tab" data-tab="permission">权限点控制</button>
+              <button class="tab active" data-tab="access">Agent 访问</button>
+              <button class="tab" data-tab="skill">Skill 使用</button>
+              <button class="tab" data-tab="permission">权限点使用</button>
             </div>
           </div>
           <div class="card-body">
-            <div id="policyWorkspace" class="workspace">
+            <div class="workspace">
               <div class="form">
                 <div class="row">
                   <label>
@@ -630,64 +662,72 @@
                     <input id="policyName">
                   </label>
                   <label>
-                    Effect
+                    策略效果
                     <select id="effect">
-                      <option value="DENY">DENY</option>
-                      <option value="PERMIT">PERMIT</option>
+                      <option value="forbid">禁止</option>
+                      <option value="permit">允许</option>
                     </select>
                   </label>
                 </div>
+
                 <div class="row">
                   <label>
-                    主体类型
-                    <select id="subjectType">
+                    适用对象
+                    <select id="principalType">
                       <option value="USER">指定用户</option>
                       <option value="USER_GROUP">用户组</option>
-                      <option value="USER_ATTRIBUTE">用户属性</option>
+                      <option value="ROLE">角色</option>
+                      <option value="ANY">所有用户</option>
                     </select>
                   </label>
                   <label>
-                    主体
-                    <input id="subjectValue">
+                    对象 ID
+                    <input id="principalId" placeholder="">
                   </label>
                 </div>
-                <div class="resource-line">
+
+                <label>
+                  管理对象
+                  <div class="checkbox-list" id="resourceOptions"></div>
+                </label>
+
+                <div class="triple">
                   <label>
-                    Action（由入口自动确定）
-                    <select id="action" disabled>
-                      <option value="agent.access">agent.access</option>
-                      <option value="skill.invoke">skill.invoke</option>
-                      <option value="permissionPoint.use">permissionPoint.use</option>
+                    环境条件
+                    <select id="whenField">
+                      <option value="">无</option>
+                      <option value="context.accessSource">访问来源</option>
+                      <option value="context.timeRange">访问时段</option>
                     </select>
                   </label>
                   <label>
-                    资源类型
-                    <select id="resourceType" disabled>
-                      <option value="AGENT">AGENT</option>
-                      <option value="SKILL">SKILL</option>
-                      <option value="PERMISSION_POINT">PERMISSION_POINT</option>
+                    运算符
+                    <select id="whenOperator">
+                      <option value="equals">等于</option>
+                      <option value="in">属于</option>
                     </select>
                   </label>
                   <label>
-                    资源
-                    <select id="resourceId"></select>
-                  </label>
-                  <div class="resource-mode-note" id="resourceModeNote">
-                    <span class="pill open" id="targetModeText">OPEN</span>
-                    <span id="targetSource">继承默认</span>
-                  </div>
-                  <label>
-                    未命中策略时
-                    <select id="targetModeControl">
-                      <option value="INHERIT">继承默认</option>
-                      <option value="OPEN">默认允许</option>
-                      <option value="RESTRICTED">默认拒绝</option>
-                    </select>
+                    条件值
+                    <input id="whenValues" placeholder="">
                   </label>
                 </div>
               </div>
 
-              <pre class="preview" id="preview"></pre>
+              <div class="side-panel">
+                <div class="side-note">
+                  <strong id="ruleSummaryTitle">当前规则</strong>
+                  <div class="muted" id="ruleSummary"></div>
+                </div>
+                <details class="cedar-details">
+                  <summary>Cedar 预览</summary>
+                  <div class="preview-title">
+                    <span>系统生成结果</span>
+                    <span class="pill blue">生成结果</span>
+                  </div>
+                  <pre class="preview" id="cedarPreview"></pre>
+                </details>
+              </div>
             </div>
           </div>
         </section>
@@ -695,10 +735,10 @@
         <section class="card">
           <div class="card-head">
             <h2>策略测试</h2>
-            <span class="pill blue">独立验证工具</span>
+            <span class="pill blue">Cedar 判定</span>
           </div>
           <div class="card-body">
-            <div id="testWorkspace" class="test-grid">
+            <div class="test-grid">
               <div class="form">
                 <div class="row">
                   <label>
@@ -712,7 +752,7 @@
                   <label>
                     测试类型
                     <select id="testType">
-                      <option value="access">访问当前 Agent</option>
+                      <option value="access">Agent 访问</option>
                       <option value="skill">使用 Skill</option>
                       <option value="permission">使用权限点</option>
                     </select>
@@ -727,9 +767,9 @@
               <div class="result" id="resultBox">
                 <div class="result-title">
                   <span>等待测试</span>
-                  <span class="pill warn">READY</span>
+                  <span class="pill blue">READY</span>
                 </div>
-                <div class="muted">当前 Agent 会自动作为 context.agentId 带入。</div>
+                <div class="muted">无 permit 命中时，Cedar 判定为拒绝。</div>
               </div>
             </div>
           </div>
@@ -737,11 +777,10 @@
 
         <section class="card">
           <div class="card-head">
-            <h2>当前目标策略列表</h2>
+            <h2>策略列表</h2>
             <div class="toolbar">
-              <span class="pill blue" id="targetPolicyCount">当前目标 0 条</span>
-              <span class="pill blue" id="agentPolicyTotal">当前 Agent 0 条</span>
-              <button class="btn danger" id="clearPolicies">清空当前目标策略</button>
+              <span class="pill blue" id="agentPolicyTotal">共 0 条</span>
+              <button class="btn danger" id="clearPolicies">清空策略</button>
             </div>
           </div>
           <div class="table-wrap">
@@ -749,11 +788,10 @@
               <thead>
                 <tr>
                   <th>策略名称</th>
-                  <th>Principal</th>
-                  <th>Effect</th>
-                  <th>动作</th>
-                  <th>资源</th>
-                  <th>Target Mode</th>
+                  <th>效果</th>
+                  <th>适用对象</th>
+                  <th>管理对象</th>
+                  <th>规则</th>
                 </tr>
               </thead>
               <tbody id="policyTable"></tbody>
@@ -765,34 +803,26 @@
   </div>
 
   <script>
+    const enterprise = "11111111111111111111111111111111";
+
     const agents = [
       {
         id: "contract_agent_001",
         name: "合同助手",
         appId: "app.erp.contract",
-        defaults: {
-          agentAccess: "OPEN",
-          skill: "OPEN",
-          permissionPoint: "OPEN"
-        },
         skills: [
           { id: "contract_summary", name: "合同总结" },
-          { id: "contract_risk_check", name: "合同风险识别", mode: "RESTRICTED" }
+          { id: "contract_risk_check", name: "合同风险识别" }
         ],
         permissionPoints: [
           { id: "erp:contract:r", name: "ERP 合同可读" },
-          { id: "erp:invoice:r", name: "ERP 发票可读", mode: "RESTRICTED" }
+          { id: "erp:invoice:r", name: "ERP 发票可读" }
         ]
       },
       {
         id: "invoice_agent_001",
         name: "发票助手",
         appId: "app.erp.invoice",
-        defaults: {
-          agentAccess: "RESTRICTED",
-          skill: "RESTRICTED",
-          permissionPoint: "RESTRICTED"
-        },
         skills: [
           { id: "invoice_check", name: "发票校验" },
           { id: "invoice_match", name: "发票匹配" }
@@ -805,11 +835,6 @@
         id: "report_agent_001",
         name: "报表助手",
         appId: "app.erp.report",
-        defaults: {
-          agentAccess: "OPEN",
-          skill: "OPEN",
-          permissionPoint: "OPEN"
-        },
         skills: [
           { id: "report_analysis", name: "报表分析" }
         ],
@@ -820,32 +845,48 @@
     ];
 
     const users = {
-      regular: { id: "Y30030001", name: "杨程义", employeeType: "REGULAR", groups: ["finance_group"] },
-      outsourcing: { id: "W10001", name: "李外包", employeeType: "WX", groups: [] },
-      blocked: { id: "Y30037812", name: "受限用户", employeeType: "REGULAR", groups: [] }
+      regular: {
+        id: "Y30030001",
+        name: "杨程义",
+        employeeType: "REGULAR",
+        department: "finance",
+        groups: ["finance_group"],
+        roles: ["contract_operator"]
+      },
+      outsourcing: {
+        id: "W10001",
+        name: "李外包",
+        employeeType: "WX",
+        department: "partner",
+        groups: [],
+        roles: []
+      },
+      blocked: {
+        id: "Y30037812",
+        name: "受限用户",
+        employeeType: "REGULAR",
+        department: "legal",
+        groups: [],
+        roles: []
+      }
+    };
+
+    const runtimeContext = {
+      accessSource: "CORP",
+      timeRange: "WORKDAY"
     };
 
     let currentAgent = agents[0];
     let currentTab = "access";
-    let policies = [];
+    let policySets = [];
     const $ = id => document.getElementById(id);
 
     function actionForTab(tab) {
-      return tab === "skill" ? "skill.invoke" : tab === "permission" ? "permissionPoint.use" : "agent.access";
+      return tab === "skill" ? "invoke" : tab === "permission" ? "use" : "access";
     }
 
     function resourceTypeForTab(tab) {
       return tab === "skill" ? "SKILL" : tab === "permission" ? "PERMISSION_POINT" : "AGENT";
-    }
-
-    function defaultModeFor(tab, agent = currentAgent) {
-      if (tab === "skill") {
-        return agent.defaults.skill;
-      }
-      if (tab === "permission") {
-        return agent.defaults.permissionPoint;
-      }
-      return agent.defaults.agentAccess;
     }
 
     function resourceListForTab(tab, agent = currentAgent) {
@@ -858,86 +899,162 @@
       return [{ id: agent.id, name: agent.name }];
     }
 
-    function resourceItemFor(tab, resourceId, agent = currentAgent) {
-      return resourceListForTab(tab, agent).find(item => item.id === resourceId);
+    function selectedResourceIds() {
+      return [...document.querySelectorAll("#resourceOptions input[type='checkbox']:checked")]
+        .map(item => item.value);
     }
 
-    function targetModeFor(tab = currentTab, resourceId = $("resourceId")?.value, agent = currentAgent) {
-      if (tab === "access") {
-        return agent.defaults.agentAccess;
+    function resourceName(type, id, agent = currentAgent) {
+      if (type === "AGENT") {
+        return agent.name;
       }
-      const resource = resourceItemFor(tab, resourceId, agent);
-      return resource?.mode || defaultModeFor(tab, agent);
+      const source = type === "SKILL" ? agent.skills : agent.permissionPoints;
+      return source.find(item => item.id === id)?.name || id;
     }
 
-    function targetModeSourceFor(tab = currentTab, resourceId = $("resourceId")?.value) {
-      if (tab === "access") {
-        return "Agent 默认";
+    function principalValue() {
+      const type = $("principalType").value;
+      if (type === "ANY") {
+        return { type: "ANY", id: "" };
       }
-      const resource = resourceItemFor(tab, resourceId);
-      return resource?.mode ? "已覆盖" : "继承默认";
+      return { type, id: $("principalId").value.trim() };
     }
 
-    function clearResourceMode(tab, resourceId, agent = currentAgent) {
-      if (tab === "access") {
-        return;
-      }
-      const resource = resourceItemFor(tab, resourceId, agent);
-      if (resource) {
-        delete resource.mode;
-      }
+    function principalLabel(principal) {
+      const labels = {
+        ANY: "所有用户",
+        USER: "用户",
+        USER_GROUP: "用户组",
+        ROLE: "角色"
+      };
+      return principal.type === "ANY" ? labels.ANY : `${labels[principal.type]}：${principal.id}`;
     }
 
-    function setResourceMode(tab, resourceId, mode, agent = currentAgent) {
-      if (tab === "access") {
-        agent.defaults.agentAccess = mode;
-        return;
-      }
-      const resource = resourceItemFor(tab, resourceId, agent);
-      if (resource) {
-        resource.mode = mode;
-      }
+    function effectLabel(effect) {
+      return effect === "permit" ? "允许" : "禁止";
     }
 
-    function currentTarget() {
-      const resourceType = resourceTypeForTab(currentTab);
-      const action = actionForTab(currentTab);
-      const resourceId = currentTab === "access" ? currentAgent.id : $("resourceId").value;
+    function actionLabel(action) {
+      return action === "access" ? "访问 Agent" : action === "invoke" ? "使用 Skill" : "使用权限点";
+    }
+
+    function resourceTypeLabel(type) {
+      return type === "AGENT" ? "Agent" : type === "SKILL" ? "Skill" : "权限点";
+    }
+
+    function whenLabel(when) {
+      if (!when.all.length) {
+        return "无附加条件";
+      }
+      const fieldLabels = {
+        "context.accessSource": "访问来源",
+        "context.timeRange": "访问时段"
+      };
+      return when.all.map(item => `${fieldLabels[item.field] || item.field}${item.operator === "in" ? "属于" : "等于"} ${item.values.join("、")}`).join("，");
+    }
+
+    function whenValue() {
+      const field = $("whenField").value;
+      const rawValues = $("whenValues").value
+        .split(",")
+        .map(item => item.trim())
+        .filter(Boolean);
+      if (!field || !rawValues.length) {
+        return { all: [] };
+      }
       return {
-        context: {
-          agentId: currentAgent.id
-        },
-        action,
-        resource: {
-          type: resourceType,
-          id: resourceId
-        },
-        accessMode: targetModeFor(currentTab, resourceId),
-        modeSource: targetModeSourceFor(currentTab, resourceId)
+        all: [
+          {
+            field,
+            operator: $("whenOperator").value,
+            values: rawValues
+          }
+        ]
       };
     }
 
-    function sameTarget(policy, target) {
-      return policy.context.agentId === target.context.agentId
-        && policy.action === target.action
-        && policy.resource.type === target.resource.type
-        && policy.resource.id === target.resource.id;
+    function currentDraft() {
+      const action = actionForTab(currentTab);
+      const resourceType = resourceTypeForTab(currentTab);
+      const resources = selectedResourceIds().length ? selectedResourceIds() : resourceListForTab(currentTab).slice(0, 1).map(item => item.id);
+      const principal = principalValue();
+      const effect = $("effect").value;
+      const policySetId = `set_${Date.now()}`;
+      const policySet = {
+        policySetId,
+        name: $("policyName").value.trim() || `${currentAgent.name}-${effect}`,
+        enterprise,
+        agentId: currentAgent.id,
+        effect,
+        principal,
+        status: "ACTIVE"
+      };
+      const rules = resources.map((resourceId, index) => ({
+        ruleId: `rule_${Date.now()}_${index + 1}`,
+        policySetId,
+        enterprise,
+        agentId: currentAgent.id,
+        effect,
+        principal,
+        action,
+        resource: {
+          type: resourceType,
+          id: resourceId,
+          displayName: resourceName(resourceType, resourceId)
+        },
+        when: whenValue(),
+        status: "ACTIVE"
+      }));
+      return { policySet, rules };
     }
 
-    function agentPolicies() {
-      return policies.filter(policy => policy.context.agentId === currentAgent.id || policy.resource.id === currentAgent.id);
-    }
-
-    function currentTargetPolicies() {
-      const target = currentTarget();
-      return policies.filter(policy => sameTarget(policy, target));
-    }
-
-    function principalLabel(subject) {
-      if (subject.selector) {
-        return `${subject.selector.field} ${subject.selector.operator} ${subject.selector.values.join(",")}`;
+    function cedarEntityForPrincipal(principal) {
+      if (principal.type === "ANY") {
+        return "principal";
       }
-      return `${subject.type}:${subject.id}`;
+      if (principal.type === "USER") {
+        return `principal == User::"${principal.id}"`;
+      }
+      if (principal.type === "USER_GROUP") {
+        return `principal in UserGroup::"${principal.id}"`;
+      }
+      return `principal in Role::"${principal.id}"`;
+    }
+
+    function cedarResource(rule) {
+      const typeMap = {
+        AGENT: "Agent",
+        SKILL: "Skill",
+        PERMISSION_POINT: "PermissionPoint"
+      };
+      return `${typeMap[rule.resource.type]}::"${rule.resource.id}"`;
+    }
+
+    function cedarWhen(rule) {
+      const conditions = [
+        `context.agentId == "${rule.agentId}"`,
+        `context.enterprise == "${rule.enterprise}"`
+      ];
+      rule.when.all.forEach(item => {
+        const values = item.values.map(value => `"${value}"`).join(", ");
+        if (item.operator === "in") {
+          conditions.push(`${item.field} in [${values}]`);
+        } else {
+          conditions.push(`${item.field} == "${item.values[0]}"`);
+        }
+      });
+      return conditions.map((item, index) => `${index === 0 ? "" : "  && "}${item}`).join("\n");
+    }
+
+    function cedarForRule(rule) {
+      return `${rule.effect}(
+  ${cedarEntityForPrincipal(rule.principal)},
+  action == Action::"${rule.action}",
+  resource == ${cedarResource(rule)}
+)
+when {
+  ${cedarWhen(rule)}
+};`;
     }
 
     function renderAgentList() {
@@ -949,8 +1066,8 @@
             <strong>${agent.name}</strong>
             <span>${agent.id}</span>
             <div class="meta">
-              <span class="pill ${agent.defaults.agentAccess === "OPEN" ? "open" : "restricted"}">${agent.defaults.agentAccess}</span>
               <span class="pill blue">${agent.skills.length} Skills</span>
+              <span class="pill blue">${agent.permissionPoints.length} 权限点</span>
             </div>
           </button>
         `).join("");
@@ -966,193 +1083,267 @@
     function renderAgentSummary() {
       $("agentTitle").textContent = currentAgent.name;
       $("agentSubtitle").textContent = `${currentAgent.id} / ${currentAgent.appId}`;
-      $("agentMode").textContent = currentAgent.defaults.agentAccess;
-      $("agentMode").className = `pill ${currentAgent.defaults.agentAccess === "OPEN" ? "open" : "restricted"}`;
       $("skillCount").textContent = currentAgent.skills.length;
       $("permissionCount").textContent = currentAgent.permissionPoints.length;
-      $("policyCount").textContent = agentPolicies().length;
-      $("accessModeText").textContent = currentAgent.defaults.agentAccess;
-      $("capabilityChips").innerHTML = [
-        ...currentAgent.skills.map(item => `<span class="chip">SKILL:${item.id} · ${targetModeFor("skill", item.id)} · ${item.mode ? "已覆盖" : "继承"}</span>`),
-        ...currentAgent.permissionPoints.map(item => `<span class="chip">PP:${item.id} · ${targetModeFor("permission", item.id)} · ${item.mode ? "已覆盖" : "继承"}</span>`)
-      ].join("");
+      $("policyCount").textContent = agentPolicySets().length;
     }
 
     function resourceOptions() {
-      const previous = $("resourceId").value;
-      $("resourceId").innerHTML = resourceListForTab(currentTab)
-        .map(item => `<option value="${item.id}">${item.name} (${item.id})</option>`)
+      const resources = resourceListForTab(currentTab);
+      $("resourceOptions").innerHTML = resources
+        .map(item => `
+          <label class="checkbox-item">
+            <input type="checkbox" value="${item.id}" checked ${currentTab === "access" ? "disabled" : ""}>
+            <span>${item.name} <span class="code">${item.id}</span></span>
+          </label>
+        `)
         .join("");
-      if ([...$("resourceId").options].some(option => option.value === previous)) {
-        $("resourceId").value = previous;
-      }
-    }
-
-    function renderTargetPanel() {
-      const target = currentTarget();
-      $("targetModeText").textContent = target.accessMode;
-      $("targetModeText").className = `pill ${target.accessMode === "OPEN" ? "open" : "restricted"}`;
-      $("targetSource").textContent = target.modeSource;
-      $("targetModeControl").value = target.modeSource === "已覆盖" ? target.accessMode : "INHERIT";
     }
 
     function applyTab() {
       const presets = {
         access: {
-          name: `${currentAgent.name}-禁止外包访问`,
-          effect: "DENY",
-          subjectType: "USER_ATTRIBUTE",
-          subjectValue: "employeeType=WX",
-          resourceType: "AGENT",
-          action: "agent.access"
+          name: `${currentAgent.name}-允许所有用户访问`,
+          effect: "permit",
+          principalType: "ANY",
+          principalId: "",
+          whenField: "",
+          whenOperator: "equals",
+          whenValues: ""
         },
         skill: {
-          name: `${currentAgent.name}-正式员工可用 Skill`,
-          effect: "PERMIT",
-          subjectType: "USER_ATTRIBUTE",
-          subjectValue: "employeeType=REGULAR",
-          resourceType: "SKILL",
-          action: "skill.invoke"
+          name: `${currentAgent.name}-指定用户可用 Skill`,
+          effect: "permit",
+          principalType: "USER",
+          principalId: "Y30037812",
+          whenField: "",
+          whenOperator: "equals",
+          whenValues: ""
         },
         permission: {
-          name: `${currentAgent.name}-限制权限点使用`,
-          effect: "DENY",
-          subjectType: "USER",
-          subjectValue: "Y30037812",
-          resourceType: "PERMISSION_POINT",
-          action: "permissionPoint.use"
-        },
+          name: `${currentAgent.name}-财务组可用权限点`,
+          effect: "permit",
+          principalType: "USER_GROUP",
+          principalId: "finance_group",
+          whenField: "",
+          whenOperator: "equals",
+          whenValues: ""
+        }
       };
-
-      const preset = presets[currentTab] || presets.access;
+      const preset = presets[currentTab];
       $("policyName").value = preset.name;
       $("effect").value = preset.effect;
-      $("subjectType").value = preset.subjectType;
-      $("subjectValue").value = preset.subjectValue;
-      $("resourceType").value = preset.resourceType;
-      $("action").value = preset.action;
+      $("principalType").value = preset.principalType;
+      $("principalId").value = preset.principalId;
+      $("whenField").value = preset.whenField;
+      $("whenOperator").value = preset.whenOperator;
+      $("whenValues").value = preset.whenValues;
+      $("principalId").disabled = preset.principalType === "ANY";
       resourceOptions();
-      renderTargetPanel();
-      renderPolicyTable();
       preview();
+      renderPolicyTable();
     }
 
-    function subjectValue() {
-      const type = $("subjectType").value;
-      const value = $("subjectValue").value.trim();
-      if (type === "USER_ATTRIBUTE") {
-        const [field, attrValue] = value.split("=");
-        return {
-          type: "USER",
-          selector: {
-            field: `subject.${field || "employeeType"}`,
-            operator: "equals",
-            values: [attrValue || ""]
-          }
-        };
-      }
-      return { type, id: value };
-    }
-
-    function currentPolicy() {
-      return {
-        policyId: `pol_${Date.now()}`,
-        policyName: $("policyName").value.trim(),
-        enterprise: "11111111111111111111111111111111",
-        subject: subjectValue(),
-        action: $("action").value,
-        resource: {
-          type: $("resourceType").value,
-          id: $("resourceId").value
-        },
-        context: {
-          agentId: currentAgent.id
-        },
-        effect: $("effect").value,
-        status: "ACTIVE"
-      };
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll("#tabs .tab").forEach(item => item.classList.toggle("active", item.dataset.tab === tab));
+      applyTab();
+      updateTestResourceOptions();
+      runTest();
     }
 
     function preview() {
-      $("preview").textContent = JSON.stringify({
-        authzTarget: currentTarget(),
-        policy: currentPolicy()
-      }, null, 2);
+      const draft = currentDraft();
+      const resourceText = draft.rules.map(rule => rule.resource.displayName).join("、");
+      $("ruleSummaryTitle").textContent = draft.policySet.name;
+      $("ruleSummary").innerHTML = `
+        <div>效果：${effectLabel(draft.policySet.effect)}</div>
+        <div>对象：${principalLabel(draft.policySet.principal)}</div>
+        <div>管理对象：${resourceText}</div>
+        <div>条件：${whenLabel(draft.rules[0]?.when || { all: [] })}</div>
+      `;
+      $("cedarPreview").textContent = draft.rules.map(cedarForRule).join("\n\n");
+    }
+
+    function agentPolicySets() {
+      return policySets.filter(item => item.policySet.agentId === currentAgent.id);
     }
 
     function renderPolicyTable() {
-      const rows = currentTargetPolicies();
-      const target = currentTarget();
-      $("targetPolicyCount").textContent = `当前目标 ${rows.length} 条`;
-      $("agentPolicyTotal").textContent = `当前 Agent ${agentPolicies().length} 条`;
+      const rows = agentPolicySets();
+      $("agentPolicyTotal").textContent = `共 ${rows.length} 条`;
       if (!rows.length) {
-        $("policyTable").innerHTML = `<tr><td colspan="6"><div class="empty">当前管控目标暂无策略，可以新增多条 PERMIT / DENY。</div></td></tr>`;
+        $("policyTable").innerHTML = `<tr><td colspan="5"><div class="empty">暂无策略。Cedar 判定中，没有 permit 命中时会拒绝。</div></td></tr>`;
         return;
       }
-      $("policyTable").innerHTML = rows.map(policy => `
-        <tr>
-          <td>${policy.policyName}</td>
-          <td><span class="code">${principalLabel(policy.subject)}</span></td>
-          <td><span class="pill ${policy.effect === "DENY" ? "deny" : "allow"}">${policy.effect}</span></td>
-          <td><span class="code">${policy.action}</span></td>
-          <td><span class="code">${policy.resource.type}:${policy.resource.id}</span></td>
-          <td><span class="pill ${target.accessMode === "OPEN" ? "open" : "restricted"}">${target.accessMode}</span></td>
-        </tr>
-      `).join("");
+      $("policyTable").innerHTML = rows.map(item => {
+        const resources = item.rules.map(rule => rule.resource.displayName).join("、");
+        const details = item.rules.map(rule => `<div class="code">${rule.ruleId} · ${rule.resource.displayName} · ${rule.resource.id}</div>`).join("");
+        return `
+          <tr>
+            <td>${item.policySet.name}</td>
+            <td><span class="pill ${item.policySet.effect}">${effectLabel(item.policySet.effect)}</span></td>
+            <td><span class="code">${principalLabel(item.policySet.principal)}</span></td>
+            <td>${resources}</td>
+            <td>
+              <span class="pill blue">${item.rules.length} 条</span>
+              <details>
+                <summary>查看规则</summary>
+                ${details}
+              </details>
+            </td>
+          </tr>
+        `;
+      }).join("");
     }
 
-    function matchSubject(policySubject, user) {
-      if (policySubject.type === "USER" && policySubject.id) {
-        return policySubject.id === user.id;
+    function savePolicy() {
+      const draft = currentDraft();
+      policySets.unshift(draft);
+      renderAll();
+    }
+
+    function loadDemoPolicies() {
+      policySets = policySets.filter(item => item.policySet.agentId !== currentAgent.id);
+
+      const demo = [
+        {
+          tab: "access",
+          name: `${currentAgent.name}-允许所有用户访问`,
+          effect: "permit",
+          principal: { type: "ANY", id: "" },
+          resources: [currentAgent.id],
+          when: { all: [] }
+        },
+        {
+          tab: "skill",
+          name: `${currentAgent.name}-Y30037812 可用 Skill`,
+          effect: "permit",
+          principal: { type: "USER", id: "Y30037812" },
+          resources: currentAgent.skills.slice(0, 1).map(item => item.id),
+          when: { all: [] }
+        },
+        {
+          tab: "permission",
+          name: `${currentAgent.name}-财务组可用权限点`,
+          effect: "permit",
+          principal: { type: "USER_GROUP", id: "finance_group" },
+          resources: currentAgent.permissionPoints.map(item => item.id),
+          when: { all: [] }
+        },
+        {
+          tab: "permission",
+          name: `${currentAgent.name}-Y30037812 禁用发票权限`,
+          effect: "forbid",
+          principal: { type: "USER", id: "Y30037812" },
+          resources: currentAgent.permissionPoints.slice(1, 2).map(item => item.id),
+          when: { all: [] }
+        }
+      ].filter(item => item.resources.length);
+
+      demo.forEach(item => {
+        const policySetId = `set_demo_${policySets.length + 1}_${Date.now()}`;
+        const action = actionForTab(item.tab);
+        const resourceType = resourceTypeForTab(item.tab);
+        const policySet = {
+          policySetId,
+          name: item.name,
+          enterprise,
+          agentId: currentAgent.id,
+          effect: item.effect,
+          principal: item.principal,
+          status: "ACTIVE"
+        };
+        const rules = item.resources.map((resourceId, index) => ({
+          ruleId: `rule_demo_${policySets.length + 1}_${index + 1}`,
+          policySetId,
+          enterprise,
+          agentId: currentAgent.id,
+          effect: item.effect,
+          principal: item.principal,
+          action,
+          resource: {
+            type: resourceType,
+            id: resourceId,
+            displayName: resourceName(resourceType, resourceId)
+          },
+          when: item.when,
+          status: "ACTIVE"
+        }));
+        policySets.unshift({ policySet, rules });
+      });
+      currentTab = "access";
+      renderAll();
+    }
+
+    function fieldValue(user, field) {
+      if (field === "context.accessSource") {
+        return runtimeContext.accessSource;
       }
-      if (policySubject.type === "USER" && policySubject.selector) {
-        const field = policySubject.selector.field.replace("subject.", "");
-        return policySubject.selector.values.includes(String(user[field] || ""));
+      if (field === "context.timeRange") {
+        return runtimeContext.timeRange;
       }
-      if (policySubject.type === "USER_GROUP") {
-        return user.groups.includes(policySubject.id);
+      return "";
+    }
+
+    function matchWhen(rule, user) {
+      return rule.when.all.every(condition => {
+        const value = fieldValue(user, condition.field);
+        if (Array.isArray(value)) {
+          return value.some(item => condition.values.includes(item));
+        }
+        if (condition.operator === "in") {
+          return condition.values.includes(String(value));
+        }
+        return String(value) === condition.values[0];
+      });
+    }
+
+    function matchPrincipal(principal, user) {
+      if (principal.type === "ANY") {
+        return true;
+      }
+      if (principal.type === "USER") {
+        return principal.id === user.id;
+      }
+      if (principal.type === "USER_GROUP") {
+        return user.groups.includes(principal.id);
+      }
+      if (principal.type === "ROLE") {
+        return user.roles.includes(principal.id);
       }
       return false;
     }
 
-    function matchPolicy(policy, test, user) {
-      return policy.context.agentId === currentAgent.id
-        && policy.resource.type === test.resourceType
-        && policy.resource.id === test.resourceId
-        && policy.action === test.action
-        && matchSubject(policy.subject, user);
+    function matchingRules(test, user) {
+      return policySets
+        .flatMap(item => item.rules.map(rule => ({ ...rule, policyName: item.policySet.name })))
+        .filter(rule => rule.agentId === currentAgent.id)
+        .filter(rule => rule.action === test.action)
+        .filter(rule => rule.resource.type === test.resourceType && rule.resource.id === test.resourceId)
+        .filter(rule => matchPrincipal(rule.principal, user))
+        .filter(rule => matchWhen(rule, user));
     }
 
     function runTest() {
       const user = users[$("testUser").value];
       const type = $("testType").value;
       const resourceType = type === "access" ? "AGENT" : type === "skill" ? "SKILL" : "PERMISSION_POINT";
-      const action = type === "access" ? "agent.access" : type === "skill" ? "skill.invoke" : "permissionPoint.use";
+      const action = type === "access" ? "access" : type === "skill" ? "invoke" : "use";
       const resourceId = type === "access" ? currentAgent.id : $("testResource").value;
-      const test = { resourceType, resourceId, action };
-      const targetTab = type === "access" ? "access" : type === "skill" ? "skill" : "permission";
-      const matched = policies.filter(policy => matchPolicy(policy, test, user));
-      const deny = matched.find(policy => policy.effect === "DENY");
-      const permit = matched.find(policy => policy.effect === "PERMIT");
-      const resourceMode = targetModeFor(targetTab, resourceId);
-      let decision = "ALLOW";
-      let reason = "OPEN_DEFAULT_ALLOW";
-      let matchedPolicy = "无";
+      const matched = matchingRules({ action, resourceType, resourceId }, user);
+      const forbid = matched.find(rule => rule.effect === "forbid");
+      const permit = matched.find(rule => rule.effect === "permit");
 
-      if (deny) {
-        decision = "DENY";
-        reason = "MATCHED_DENY_POLICY";
-        matchedPolicy = deny.policyName;
-      } else if (resourceMode === "OPEN") {
-        if (permit) {
-          reason = "MATCHED_PERMIT_POLICY";
-          matchedPolicy = permit.policyName;
-        }
-      } else if (resourceMode === "RESTRICTED" && !permit) {
-        decision = "DENY";
-        reason = "RESTRICTED_NO_PERMIT";
+      let decision = "DENY";
+      let reason = "CEDAR_NO_PERMIT";
+      let matchedPolicy = "无";
+      if (forbid) {
+        reason = "MATCHED_FORBID";
+        matchedPolicy = forbid.policyName;
       } else if (permit) {
-        reason = "MATCHED_PERMIT_POLICY";
+        decision = "ALLOW";
+        reason = "MATCHED_PERMIT";
         matchedPolicy = permit.policyName;
       }
 
@@ -1162,12 +1353,10 @@
           <span>${decision}</span>
           <span class="pill ${decision === "ALLOW" ? "allow" : "deny"}">${decision === "ALLOW" ? "允许" : "拒绝"}</span>
         </div>
-        <div class="muted">Agent：${currentAgent.name} (${currentAgent.id})</div>
         <div class="muted">用户：${user.name} (${user.id})</div>
-        <div class="muted">管控目标：${action} / ${resourceType}:${resourceId}</div>
-        <div class="muted">目标模式：${resourceMode}</div>
+        <div class="muted">管理对象：${resourceName(resourceType, resourceId)}</div>
         <div class="muted">命中策略：${matchedPolicy}</div>
-        <div class="muted">最终原因：${reason}</div>
+        <div class="muted">原因：${reason}</div>
       `;
     }
 
@@ -1189,102 +1378,27 @@
       }
     }
 
-    function switchTab(tab) {
-      if (!["access", "skill", "permission"].includes(tab)) {
-        tab = "access";
-      }
-      currentTab = tab;
-      document.querySelectorAll("#tabs .tab").forEach(item => item.classList.toggle("active", item.dataset.tab === tab));
-      $("savePolicy").disabled = false;
-      applyTab();
-    }
-
-    function loadDemoPolicies() {
-      policies = policies.filter(policy => policy.context.agentId !== currentAgent.id);
-      setResourceMode("access", currentAgent.id, "OPEN");
-      setResourceMode("skill", currentAgent.skills[1]?.id || currentAgent.skills[0]?.id, "RESTRICTED");
-      setResourceMode("permission", currentAgent.permissionPoints[1]?.id || currentAgent.permissionPoints[0]?.id, "RESTRICTED");
-
-      const demo = [
-        {
-          tab: "access",
-          resourceId: currentAgent.id,
-          effect: "DENY",
-          subjectType: "USER_ATTRIBUTE",
-          subjectValue: "employeeType=WX"
-        },
-        {
-          tab: "skill",
-          resourceId: currentAgent.skills[1]?.id || currentAgent.skills[0]?.id,
-          effect: "PERMIT",
-          subjectType: "USER_ATTRIBUTE",
-          subjectValue: "employeeType=REGULAR"
-        },
-        {
-          tab: "permission",
-          resourceId: currentAgent.permissionPoints[1]?.id || currentAgent.permissionPoints[0]?.id,
-          effect: "PERMIT",
-          subjectType: "USER_GROUP",
-          subjectValue: "finance_group"
-        },
-        {
-          tab: "permission",
-          resourceId: currentAgent.permissionPoints[1]?.id || currentAgent.permissionPoints[0]?.id,
-          effect: "DENY",
-          subjectType: "USER",
-          subjectValue: "Y30037812"
-        }
-      ].filter(item => item.resourceId);
-
-      demo.forEach(item => {
-        currentTab = item.tab;
-        applyTab();
-        $("resourceId").value = item.resourceId;
-        renderTargetPanel();
-        $("effect").value = item.effect;
-        $("subjectType").value = item.subjectType;
-        $("subjectValue").value = item.subjectValue;
-        policies.unshift(currentPolicy());
-      });
-      currentTab = "access";
-      renderAll();
-    }
-
     function bind() {
       $("agentSearch").addEventListener("input", renderAgentList);
       document.querySelectorAll("#tabs .tab").forEach(tab => {
         tab.addEventListener("click", () => switchTab(tab.dataset.tab));
       });
-      ["policyName", "effect", "subjectType", "subjectValue"].forEach(id => {
+      ["policyName", "effect", "principalType", "principalId", "whenField", "whenOperator", "whenValues"].forEach(id => {
         $(id).addEventListener("input", preview);
+        $(id).addEventListener("change", preview);
       });
-      $("resourceId").addEventListener("change", () => {
-        renderTargetPanel();
-        renderPolicyTable();
-        preview();
-        runTest();
-      });
-      $("targetModeControl").addEventListener("change", () => {
-        if ($("targetModeControl").value === "INHERIT") {
-          clearResourceMode(currentTab, $("resourceId").value);
-        } else {
-          setResourceMode(currentTab, $("resourceId").value, $("targetModeControl").value);
+      $("resourceOptions").addEventListener("change", preview);
+      $("principalType").addEventListener("change", () => {
+        $("principalId").disabled = $("principalType").value === "ANY";
+        if ($("principalType").value === "ANY") {
+          $("principalId").value = "";
         }
-        renderAgentList();
-        renderAgentSummary();
-        renderTargetPanel();
-        renderPolicyTable();
         preview();
-        runTest();
       });
-      $("savePolicy").addEventListener("click", () => {
-        policies.unshift(currentPolicy());
-        renderAll();
-      });
+      $("savePolicy").addEventListener("click", savePolicy);
       $("loadDemo").addEventListener("click", loadDemoPolicies);
       $("clearPolicies").addEventListener("click", () => {
-        const target = currentTarget();
-        policies = policies.filter(policy => !sameTarget(policy, target));
+        policySets = policySets.filter(item => item.policySet.agentId !== currentAgent.id);
         renderAll();
       });
       $("testType").addEventListener("change", () => {
@@ -1301,6 +1415,7 @@
       renderAgentSummary();
       switchTab(currentTab);
       updateTestResourceOptions();
+      renderPolicyTable();
       runTest();
     }
 
