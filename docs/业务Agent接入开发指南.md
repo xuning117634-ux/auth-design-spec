@@ -447,29 +447,52 @@ sessionStorage 中未完成的授权上下文
 - 如果 IDaaS Cookie 仍存在，下一次登录可能会静默完成。
 - 如果要切换 IDaaS 用户，需要额外接入 IDaaS logout 或强制登录参数。
 
-## 12. 常见问题
+## 12. 长期授权接入说明
 
-### 12.1 为什么不能把 `TR` 放到 URL？
+如果后续 IDaaS 支持用户选择长期授权或永久授权，业务 Agent 的接入方式保持不变。
+
+业务 Agent 仍按原流程处理：
+
+1. 本地无可用 `TR`、`TR` 过期或覆盖工具不足时，调用 `POST /gw/token/resource-token`。
+2. 收到 `redirect_url` 后让浏览器跳转。
+3. 授权完成回跳后，用 `token_result_ticket` 调 `POST /gw/token/result/exchange`。
+4. 换回新的短期 `TR`，校验用户一致后写入本地 `tr_cache`。
+
+长期授权只影响 IDaaS 是否展示授权确认页：
+
+- 如果用户此前没有授权，IDaaS 展示授权页，用户确认后返回 `code`。
+- 如果用户此前已经选择长期授权，IDaaS 可以不展示授权页，直接快速返回 `code`。
+- 无论是否长期授权，业务 Agent 最终拿到的仍然是短期 `TR`。
+
+业务 Agent 不需要保存长期授权记录，也不需要感知长期授权是否命中。取消长期授权应在 IDaaS 或统一授权管理页完成；退出业务 Agent 只清理自己的 `site_session` 和 `tr_cache`，不等于取消 IDaaS 长期授权。
+
+## 13. 常见问题
+
+### 13.1 为什么不能把 `TR` 放到 URL？
 
 `TR` 是资源访问令牌，放在 URL 中容易被浏览器历史、代理日志、服务端访问日志或监控系统记录。业务 Agent 必须通过后端接口交换并保存 `TR`。
 
-### 12.2 为什么需要 `ticketST` 和 `token_result_ticket`？
+### 13.2 为什么需要 `ticketST` 和 `token_result_ticket`？
 
 它们是一次性取件凭据，用来避免浏览器 URL 直接暴露用户信息、`Tc` 或 `TR`。业务 Agent 后端拿到票据后，再向 Agent 网关交换真实结果。
 
-### 12.3 退出业务 Agent 后为什么可能没有重新出现 IDaaS 登录页？
+### 13.3 退出业务 Agent 后为什么可能没有重新出现 IDaaS 登录页？
 
 业务 Agent 退出只清理自己的 `site_session` 和 `TR` 缓存，不等于退出 IDaaS。只要 IDaaS Cookie 仍有效，下一次登录可能会静默完成。
 
-### 12.4 不对接登录系统时，`subject_hint` 是可信身份吗？
+### 13.4 不对接登录系统时，`subject_hint` 是可信身份吗？
 
 不是。`subject_hint` 只用于辅助 IDaaS 定位用户。最终用户身份以 IDaaS/IAM 令牌中的用户信息为准，业务 Agent 换回 `TR` 后仍需校验用户一致性。
 
-### 12.5 业务 Agent 是否需要理解权限点？
+### 13.5 业务 Agent 是否需要理解权限点？
 
 业务 Agent 不需要自己构造权限点 code。业务 Agent 只需要知道本次请求需要哪些 `required_tools`。Agent 网关会把 tool 解析为权限点并发起授权。
 
-## 13. 联调验收清单
+### 13.6 长期授权后，业务 Agent 能不能直接长期复用旧 `TR`？
+
+不能。长期授权记录由 IDaaS 保存，`TR` 仍然是短期资源访问令牌。业务 Agent 只能在 `TR` 未过期且覆盖当前工具时复用；一旦过期或覆盖不足，仍需要重新走 Agent 网关申请新的短期 `TR`。
+
+## 14. 联调验收清单
 
 - 首次进入业务 Agent，无 `site_session` 时能跳转 Agent 网关登录。
 - 登录完成后业务 Agent 能收到 `ticketST`，并后端换取用户信息。
@@ -481,8 +504,9 @@ sessionStorage 中未完成的授权上下文
 - 业务 Agent 能缓存 `TR`，并在二次同类请求中复用。
 - MCP 网关返回无权限时，业务 Agent 能给用户明确提示。
 - 退出登录后，业务 Agent 本地 `site_session` 和 `tr_cache` 被清理。
+- 命中 IDaaS 长期授权记录时，用户可不再看到授权确认页，但业务 Agent 仍能换回新的短期 `TR`。
 
-## 14. 接入方实现边界
+## 15. 接入方实现边界
 
 业务 Agent 需要做：
 

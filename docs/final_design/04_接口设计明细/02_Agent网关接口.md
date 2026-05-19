@@ -13,6 +13,7 @@ Agent 网关负责：
 Agent 网关不负责：
 
 - 维护长期用户登录态。
+- 保存长期授权账本。
 - 判断业务 Agent 本地是否已有可复用 `TR`。
 - 在浏览器 URL 中返回 `Tc`、`TR` 或用户信息。
 
@@ -218,6 +219,7 @@ Content-Type: application/json
 - 工具与权限点的映射关系不带 `agent` 维度。
 - 该接口不接收长期网关登录凭证。
 - 该接口不直接返回 `TR`。
+- 该接口不判断 IDaaS 是否已有长期授权记录；长期授权只会影响后续 IDaaS authorize 是否展示授权页。
 
 ### 6.5 成功响应示例
 
@@ -259,6 +261,7 @@ GET /gw/auth/authorize?request_id=req_001
 5. 302 跳转到 IDaaS `/authorize`，并携带 `client_id + agent_id`。
 6. 浏览器实际访问 IDaaS 授权地址。
 7. 首次非 base 授权通常由 IDaaS 展示授权页，用户确认后再 302 回网关 callback。
+8. 如果 IDaaS 已有匹配的长期授权记录，可以不展示授权页，直接快速返回 `code` 到网关 callback。
 
 ### 7.4 响应示例
 
@@ -301,7 +304,7 @@ Location: https://business-agent.huawei.com/agent?token_result_ticket=trt_001&re
 
 ### 9.1 用途
 
-业务 Agent 后端用 `token_result_ticket` 换取授权完成后的 `TR`。
+业务 Agent 后端用 `token_result_ticket` 换取授权完成后的短期 `TR`。
 
 ### 9.2 请求示例
 
@@ -333,6 +336,11 @@ Content-Type: application/json
 3. 校验 `token_result_ticket` 绑定的 `agent_id` 与请求一致。
 4. 将 `token_result_ticket` 标记为已使用。
 5. 返回 `TR`、过期时间、授权用户信息和权限点。
+
+说明：
+
+- 即使命中 IDaaS 长期授权记录，该接口返回的仍然是短期 `TR`。
+- 长期授权记录不通过该接口返回，也不由 Agent 网关保存。
 
 ### 9.5 成功响应示例
 
@@ -369,3 +377,12 @@ Content-Type: application/json
 - 票据必须绑定原始 `return_url` 所属白名单。
 - 交换接口必须由业务 Agent 后端调用，不允许前端直接读取结果。
 - 业务 Agent 换回 `TR` 后，必须校验 `TR.agency_user` 与当前 `site_session` 用户一致。
+
+## 11. 长期授权兼容说明
+
+- Agent 网关接口不因长期授权改变签名。
+- `POST /gw/token/resource-token` 仍只负责创建授权事务并返回 `redirect_url + request_id`。
+- `GET /gw/auth/authorize` 仍跳转 IDaaS authorize；是否展示授权页由 IDaaS 根据登录态和长期授权记录判断。
+- `GET /gw/auth/consent/callback` 仍执行 `code -> Tc -> T1 -> TR`。
+- `POST /gw/token/result/exchange` 仍通过 `token_result_ticket` 返回短期 `TR`。
+- Agent 网关不保存长期授权记录，不提供当前阶段的后端无感刷新接口。
