@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -20,6 +21,9 @@ class PolicyResolutionControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void shouldResolveToolsToPermissionPointsWithoutAgentId() throws Exception {
@@ -451,6 +455,243 @@ class PolicyResolutionControllerTest {
                 .andExpect(jsonPath("$.permissionPointCodes.length()").value(0))
                 .andExpect(jsonPath("$.permissionPoints.length()").value(0))
                 .andExpect(jsonPath("$.tools.length()").value(0));
+    }
+
+    @Test
+    void shouldHardDeletePermissionPointAndCascadeRelatedData() throws Exception {
+        mockMvc.perform(post("/internal/v1/permission-points/batch-hard-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "enterprise": "ent_001",
+                                  "permissionPointCodes": [
+                                    "erp:contract:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deletedCount").value(1))
+                .andExpect(jsonPath("$.items[0].id").value("erp:contract:r"))
+                .andExpect(jsonPath("$.items[0].result").value("DELETED"));
+
+        mockMvc.perform(post("/internal/v1/permission-points/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "enterprise": "ent_001",
+                                  "permissionPointCodes": [
+                                    "erp:contract:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissionPoints.length()").value(0));
+
+        mockMvc.perform(post("/internal/v1/permission-points/resolve-by-codes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "permissionPointCodes": [
+                                    "erp:contract:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissionPointCodes.length()").value(0))
+                .andExpect(jsonPath("$.permissionPoints.length()").value(0))
+                .andExpect(jsonPath("$.tools.length()").value(0));
+
+        mockMvc.perform(post("/internal/v1/agent-strategies/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agentId": "agt_business_001",
+                                  "permissionPointCodes": [
+                                    "erp:contract:r",
+                                    "erp:invoice:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissionPointCodes.length()").value(1))
+                .andExpect(jsonPath("$.permissionPointCodes[0]").value("erp:invoice:r"))
+                .andExpect(jsonPath("$.strategies.length()").value(1))
+                .andExpect(jsonPath("$.strategies[0].permissionPointCode").value("erp:invoice:r"));
+
+        String snapshot = jdbcTemplate.queryForObject("""
+                SELECT permission_point_codes
+                FROM pc_agent_permission_point
+                WHERE agent_id = 'agt_business_001'
+                  AND enterprise = 'ent_001'
+                """, String.class);
+        org.assertj.core.api.Assertions.assertThat(snapshot)
+                .isEqualTo("erp:invoice:r,erp:report:r");
+
+        mockMvc.perform(post("/internal/v1/permission-points/batch-hard-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "enterprise": "ent_001",
+                                  "permissionPointCodes": [
+                                    "erp:contract:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deletedCount").value(0))
+                .andExpect(jsonPath("$.items[0].id").value("erp:contract:r"))
+                .andExpect(jsonPath("$.items[0].result").value("NOT_FOUND"));
+    }
+
+    @Test
+    void shouldKeepToolWhenHardDeletingPermissionPoint() throws Exception {
+        mockMvc.perform(put("/internal/v1/permission-points/batch-upsert")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "source": "mcp_gateway",
+                                  "items": [
+                                    {
+                                      "permissionPointCode": "erp:contract:detail:r",
+                                      "enterprise": "ent_001",
+                                      "appId": "erp",
+                                      "displayNameZh": "Contract detail read permission",
+                                      "description": "Allow reading contract detail data",
+                                      "boundTools": [
+                                        "mcp:contract-server/get_contract"
+                                      ],
+                                      "status": "ACTIVE"
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/internal/v1/permission-points/batch-hard-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "enterprise": "ent_001",
+                                  "permissionPointCodes": [
+                                    "erp:contract:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deletedCount").value(1));
+
+        mockMvc.perform(post("/internal/v1/permission-points/resolve-by-tools")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requiredTools": [
+                                    "mcp:contract-server/get_contract"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiredPermissionPointCodes.length()").value(1))
+                .andExpect(jsonPath("$.requiredPermissionPointCodes[0]").value("erp:contract:detail:r"));
+    }
+
+    @Test
+    void shouldHardDeleteAgentStrategyAndConditionValues() throws Exception {
+        mockMvc.perform(post("/internal/v1/agent-strategies/batch-hard-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agentId": "agt_business_001",
+                                  "strategyIds": [
+                                    "stg_invoice_deny_blocked_user"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deletedCount").value(1))
+                .andExpect(jsonPath("$.items[0].id").value("stg_invoice_deny_blocked_user"))
+                .andExpect(jsonPath("$.items[0].result").value("DELETED"));
+
+        Integer conditionValueCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM pc_agent_strategy_condition_value
+                WHERE strategy_id = 'stg_invoice_deny_blocked_user'
+                """, Integer.class);
+        org.assertj.core.api.Assertions.assertThat(conditionValueCount).isZero();
+
+        mockMvc.perform(post("/internal/v1/agent-strategies/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agentId": "agt_business_001",
+                                  "permissionPointCodes": [
+                                    "erp:contract:r",
+                                    "erp:invoice:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.strategies.length()").value(1))
+                .andExpect(jsonPath("$.strategies[0].strategyId").value("stg_contract_permit_demo_user"));
+
+        mockMvc.perform(post("/internal/v1/agent-strategies/batch-hard-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agentId": "agt_business_001",
+                                  "strategyIds": [
+                                    "stg_invoice_deny_blocked_user"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deletedCount").value(0))
+                .andExpect(jsonPath("$.items[0].id").value("stg_invoice_deny_blocked_user"))
+                .andExpect(jsonPath("$.items[0].result").value("NOT_FOUND"));
+    }
+
+    @Test
+    void shouldRejectInvalidHardDeleteRequests() throws Exception {
+        mockMvc.perform(post("/internal/v1/permission-points/batch-hard-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "permissionPointCodes": [
+                                    "erp:contract:r"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/internal/v1/permission-points/batch-hard-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "enterprise": "ent_001",
+                                  "permissionPointCodes": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/internal/v1/agent-strategies/batch-hard-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "strategyIds": [
+                                    "stg_invoice_deny_blocked_user"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/internal/v1/agent-strategies/batch-hard-delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agentId": "agt_business_001",
+                                  "strategyIds": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     private void upsertContractPermissionPoint(String status) throws Exception {

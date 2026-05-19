@@ -17,6 +17,17 @@ public interface PermissionPointToolRelMapper {
             """)
     int deleteByPermissionPointCode(@Param("permissionPointCode") String permissionPointCode);
 
+    @Delete({
+            "<script>",
+            "DELETE FROM pc_permission_point_tool_rel",
+            "WHERE permission_point_code IN",
+            "<foreach collection='permissionPointCodes' item='code' open='(' separator=',' close=')'>",
+            "#{code}",
+            "</foreach>",
+            "</script>"
+    })
+    int deleteByPermissionPointCodes(@Param("permissionPointCodes") List<String> permissionPointCodes);
+
     @Insert({
             "<script>",
             "INSERT INTO pc_permission_point_tool_rel (permission_point_code, tool_id, created_at)",

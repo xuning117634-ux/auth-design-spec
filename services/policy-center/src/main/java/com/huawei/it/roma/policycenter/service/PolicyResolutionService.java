@@ -18,8 +18,11 @@ import com.huawei.it.roma.policycenter.persistence.model.StrategyConditionValueR
 import com.huawei.it.roma.policycenter.persistence.model.ToolRow;
 import com.huawei.it.roma.policycenter.web.AgentPermissionPointBatchUpsertRequest;
 import com.huawei.it.roma.policycenter.web.AgentPermissionPointBatchUpsertResponse;
+import com.huawei.it.roma.policycenter.web.AgentStrategyBatchHardDeleteRequest;
 import com.huawei.it.roma.policycenter.web.AgentStrategyBatchUpsertRequest;
 import com.huawei.it.roma.policycenter.web.AgentStrategyBatchUpsertResponse;
+import com.huawei.it.roma.policycenter.web.BatchHardDeleteResponse;
+import com.huawei.it.roma.policycenter.web.PermissionPointBatchHardDeleteRequest;
 import com.huawei.it.roma.policycenter.web.PermissionPointBatchUpsertRequest;
 import com.huawei.it.roma.policycenter.web.PermissionPointBatchUpsertResponse;
 import com.huawei.it.roma.policycenter.web.QueryAgentStrategiesResponse;
@@ -34,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -142,6 +146,77 @@ public class PolicyResolutionService {
                 permissionPointCodes.size(),
                 permissionPointCodes
         );
+    }
+
+    @Transactional
+    public BatchHardDeleteResponse hardDeletePermissionPoints(PermissionPointBatchHardDeleteRequest request) {
+        if (request == null) {
+            throw new PolicyResolutionException("permission point hard delete request must not be null");
+        }
+        String enterprise = normalizeValue(request.enterprise(), "enterprise");
+        List<String> permissionPointCodes = sanitizePermissionPointCodes(request.permissionPointCodes(),
+                "permission_point_codes");
+
+        List<PermissionPointRow> rows = permissionPointMapper.findByEnterpriseAndCodes(enterprise, permissionPointCodes);
+        Set<String> existingCodes = rows.stream()
+                .map(PermissionPointRow::getPermissionPointCode)
+                .collect(Collectors.toSet());
+        List<String> codesToDelete = permissionPointCodes.stream()
+                .filter(existingCodes::contains)
+                .toList();
+
+        if (!codesToDelete.isEmpty()) {
+            removePermissionPointsFromAgentSubscriptions(enterprise, codesToDelete);
+            List<String> strategyIds = agentStrategyMapper.findByPermissionPointCodes(codesToDelete).stream()
+                    .map(AgentStrategyRow::getStrategyId)
+                    .distinct()
+                    .sorted()
+                    .toList();
+            if (!strategyIds.isEmpty()) {
+                strategyConditionValueMapper.deleteByStrategyIds(strategyIds);
+            }
+            agentStrategyMapper.deleteByPermissionPointCodes(codesToDelete);
+            permissionPointToolRelMapper.deleteByPermissionPointCodes(codesToDelete);
+            permissionPointMapper.deleteByEnterpriseAndCodes(enterprise, codesToDelete);
+        }
+
+        List<BatchHardDeleteResponse.ItemResult> items = permissionPointCodes.stream()
+                .map(code -> new BatchHardDeleteResponse.ItemResult(
+                        code,
+                        existingCodes.contains(code) ? "DELETED" : "NOT_FOUND"
+                ))
+                .toList();
+        return new BatchHardDeleteResponse(codesToDelete.size(), items);
+    }
+
+    @Transactional
+    public BatchHardDeleteResponse hardDeleteAgentStrategies(AgentStrategyBatchHardDeleteRequest request) {
+        if (request == null) {
+            throw new PolicyResolutionException("agent strategy hard delete request must not be null");
+        }
+        String agentId = normalizeValue(request.agentId(), "agent_id");
+        List<String> strategyIds = sanitizeAndSort(request.strategyIds(), "strategy_ids");
+
+        List<AgentStrategyRow> rows = agentStrategyMapper.findByAgentIdAndStrategyIds(agentId, strategyIds);
+        Set<String> existingIds = rows.stream()
+                .map(AgentStrategyRow::getStrategyId)
+                .collect(Collectors.toSet());
+        List<String> idsToDelete = strategyIds.stream()
+                .filter(existingIds::contains)
+                .toList();
+
+        if (!idsToDelete.isEmpty()) {
+            strategyConditionValueMapper.deleteByStrategyIds(idsToDelete);
+            agentStrategyMapper.deleteByAgentIdAndStrategyIds(agentId, idsToDelete);
+        }
+
+        List<BatchHardDeleteResponse.ItemResult> items = strategyIds.stream()
+                .map(strategyId -> new BatchHardDeleteResponse.ItemResult(
+                        strategyId,
+                        existingIds.contains(strategyId) ? "DELETED" : "NOT_FOUND"
+                ))
+                .toList();
+        return new BatchHardDeleteResponse(idsToDelete.size(), items);
     }
 
     public ResolveByToolsResponse resolveByTools(List<String> requiredTools) {
@@ -372,6 +447,22 @@ public class PolicyResolutionService {
         strategyConditionValueMapper.insertBatch(values);
     }
 
+    private void removePermissionPointsFromAgentSubscriptions(String enterprise, List<String> codesToDelete) {
+        Set<String> deletedCodes = Set.copyOf(codesToDelete);
+        agentPermissionPointMapper.findByEnterprise(enterprise).forEach(row -> {
+            List<String> currentCodes = splitPermissionPointCodes(row.getPermissionPointCodes());
+            List<String> remainingCodes = currentCodes.stream()
+                    .filter(code -> !deletedCodes.contains(code))
+                    .collect(Collectors.toCollection(TreeSet::new))
+                    .stream()
+                    .toList();
+            if (!remainingCodes.equals(currentCodes)) {
+                row.setPermissionPointCodes(String.join(",", remainingCodes));
+                agentPermissionPointMapper.update(row);
+            }
+        });
+    }
+
     private NormalizedPermissionPoint normalizePermissionPoint(
             PermissionPointBatchUpsertRequest.Item item,
             String source
@@ -578,6 +669,33 @@ public class PolicyResolutionService {
                     }
                     return value;
                 })
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    private List<String> sanitizePermissionPointCodes(List<String> values, String fieldName) {
+        if (CollectionUtils.isEmpty(values)) {
+            throw new PolicyResolutionException(fieldName + " must not be empty");
+        }
+        List<String> sanitized = values.stream()
+                .map(value -> normalizePermissionPointCode(value, fieldName))
+                .distinct()
+                .sorted()
+                .toList();
+        if (sanitized.isEmpty()) {
+            throw new PolicyResolutionException(fieldName + " must not be empty");
+        }
+        return sanitized;
+    }
+
+    private List<String> splitPermissionPointCodes(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return List.of(value.split(",")).stream()
+                .map(String::trim)
+                .filter(code -> !code.isEmpty())
                 .distinct()
                 .sorted()
                 .toList();

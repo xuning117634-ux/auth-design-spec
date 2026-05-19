@@ -17,6 +17,17 @@ public interface StrategyConditionValueMapper {
             """)
     int deleteByStrategyId(@Param("strategyId") String strategyId);
 
+    @Delete({
+            "<script>",
+            "DELETE FROM pc_agent_strategy_condition_value",
+            "WHERE strategy_id IN",
+            "<foreach collection='strategyIds' item='strategyId' open='(' separator=',' close=')'>",
+            "#{strategyId}",
+            "</foreach>",
+            "</script>"
+    })
+    int deleteByStrategyIds(@Param("strategyIds") List<String> strategyIds);
+
     @Insert({
             "<script>",
             "INSERT INTO pc_agent_strategy_condition_value (strategy_id, value_order, condition_value)",

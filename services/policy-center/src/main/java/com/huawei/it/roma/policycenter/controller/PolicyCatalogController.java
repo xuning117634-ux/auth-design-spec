@@ -3,8 +3,11 @@ package com.huawei.it.roma.policycenter.controller;
 import com.huawei.it.roma.policycenter.service.PolicyResolutionService;
 import com.huawei.it.roma.policycenter.web.AgentPermissionPointBatchUpsertRequest;
 import com.huawei.it.roma.policycenter.web.AgentPermissionPointBatchUpsertResponse;
+import com.huawei.it.roma.policycenter.web.AgentStrategyBatchHardDeleteRequest;
 import com.huawei.it.roma.policycenter.web.AgentStrategyBatchUpsertRequest;
 import com.huawei.it.roma.policycenter.web.AgentStrategyBatchUpsertResponse;
+import com.huawei.it.roma.policycenter.web.BatchHardDeleteResponse;
+import com.huawei.it.roma.policycenter.web.PermissionPointBatchHardDeleteRequest;
 import com.huawei.it.roma.policycenter.web.PermissionPointBatchUpsertRequest;
 import com.huawei.it.roma.policycenter.web.PermissionPointBatchUpsertResponse;
 import com.huawei.it.roma.policycenter.web.QueryPermissionPointsRequest;
@@ -40,6 +43,13 @@ public class PolicyCatalogController {
         return policyResolutionService.queryPermissionPoints(request);
     }
 
+    @PostMapping("/permission-points/batch-hard-delete")
+    public BatchHardDeleteResponse hardDeletePermissionPoints(
+            @Valid @RequestBody PermissionPointBatchHardDeleteRequest request
+    ) {
+        return policyResolutionService.hardDeletePermissionPoints(request);
+    }
+
     @PutMapping("/agent-permission-points/batch-upsert")
     public AgentPermissionPointBatchUpsertResponse upsertAgentPermissionPoints(
             @Valid @RequestBody AgentPermissionPointBatchUpsertRequest request
@@ -52,5 +62,12 @@ public class PolicyCatalogController {
             @Valid @RequestBody AgentStrategyBatchUpsertRequest request
     ) {
         return policyResolutionService.upsertAgentStrategies(request);
+    }
+
+    @PostMapping("/agent-strategies/batch-hard-delete")
+    public BatchHardDeleteResponse hardDeleteAgentStrategies(
+            @Valid @RequestBody AgentStrategyBatchHardDeleteRequest request
+    ) {
+        return policyResolutionService.hardDeleteAgentStrategies(request);
     }
 }

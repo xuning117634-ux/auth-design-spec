@@ -2,6 +2,7 @@ package com.huawei.it.roma.policycenter.persistence.mapper;
 
 import com.huawei.it.roma.policycenter.persistence.model.PermissionPointRow;
 import java.util.List;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -115,6 +116,21 @@ public interface PermissionPointMapper {
             "</script>"
     })
     List<PermissionPointRow> findByEnterpriseAndCodes(
+            @Param("enterprise") String enterprise,
+            @Param("permissionPointCodes") List<String> permissionPointCodes
+    );
+
+    @Delete({
+            "<script>",
+            "DELETE FROM pc_permission_point",
+            "WHERE enterprise = #{enterprise}",
+            "AND permission_point_code IN",
+            "<foreach collection='permissionPointCodes' item='code' open='(' separator=',' close=')'>",
+            "#{code}",
+            "</foreach>",
+            "</script>"
+    })
+    int deleteByEnterpriseAndCodes(
             @Param("enterprise") String enterprise,
             @Param("permissionPointCodes") List<String> permissionPointCodes
     );

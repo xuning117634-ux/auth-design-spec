@@ -2,6 +2,7 @@ package com.huawei.it.roma.policycenter.persistence.mapper;
 
 import com.huawei.it.roma.policycenter.persistence.model.AgentStrategyRow;
 import java.util.List;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -61,6 +62,62 @@ public interface AgentStrategyMapper {
             "</script>"
     })
     List<AgentStrategyRow> findByStrategyIds(@Param("strategyIds") List<String> strategyIds);
+
+    @Select({
+            "<script>",
+            "SELECT strategy_id, agent_id, permission_point_code, condition_field, condition_operator, effect, status",
+            "FROM pc_agent_strategy",
+            "WHERE agent_id = #{agentId}",
+            "AND strategy_id IN",
+            "<foreach collection='strategyIds' item='strategyId' open='(' separator=',' close=')'>",
+            "#{strategyId}",
+            "</foreach>",
+            "</script>"
+    })
+    List<AgentStrategyRow> findByAgentIdAndStrategyIds(
+            @Param("agentId") String agentId,
+            @Param("strategyIds") List<String> strategyIds
+    );
+
+    @Select({
+            "<script>",
+            "SELECT strategy_id, agent_id, permission_point_code, condition_field, condition_operator, effect, status",
+            "FROM pc_agent_strategy",
+            "WHERE permission_point_code IN",
+            "<foreach collection='permissionPointCodes' item='code' open='(' separator=',' close=')'>",
+            "#{code}",
+            "</foreach>",
+            "</script>"
+    })
+    List<AgentStrategyRow> findByPermissionPointCodes(
+            @Param("permissionPointCodes") List<String> permissionPointCodes
+    );
+
+    @Delete({
+            "<script>",
+            "DELETE FROM pc_agent_strategy",
+            "WHERE agent_id = #{agentId}",
+            "AND strategy_id IN",
+            "<foreach collection='strategyIds' item='strategyId' open='(' separator=',' close=')'>",
+            "#{strategyId}",
+            "</foreach>",
+            "</script>"
+    })
+    int deleteByAgentIdAndStrategyIds(
+            @Param("agentId") String agentId,
+            @Param("strategyIds") List<String> strategyIds
+    );
+
+    @Delete({
+            "<script>",
+            "DELETE FROM pc_agent_strategy",
+            "WHERE permission_point_code IN",
+            "<foreach collection='permissionPointCodes' item='code' open='(' separator=',' close=')'>",
+            "#{code}",
+            "</foreach>",
+            "</script>"
+    })
+    int deleteByPermissionPointCodes(@Param("permissionPointCodes") List<String> permissionPointCodes);
 
     @Select({
             "<script>",
