@@ -308,6 +308,14 @@
     .step-left { display: flex; align-items: center; gap: 10px; }
     .step .ok { color: var(--success); }
     .step .pending { color: var(--warning); }
+    .step .active {
+      color: var(--primary);
+      animation: pulse 1.1s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.45; transform: scale(0.92); }
+      50% { opacity: 1; transform: scale(1); }
+    }
     .source-tag {
       border: 1px solid rgba(128, 131, 255, 0.32);
       color: #dfe0ff;
@@ -531,6 +539,24 @@
       gateway: "网关新取 TR"
     };
 
+    const toolCatalog = [
+      {
+        match: ["合同", "contract"],
+        id: "mcp:contract-server/get_contract",
+        label: "ERP 合同查询工具"
+      },
+      {
+        match: ["财报", "报表", "report"],
+        id: "mcp:financial-report-server/query_monthly_report",
+        label: "ERP 财报查询工具"
+      },
+      {
+        match: ["发票", "invoice"],
+        id: "mcp:invoice-server/query_invoices",
+        label: "ERP 发票查询工具"
+      }
+    ];
+
     function scrollToBottom() {
       requestAnimationFrame(() => {
         workspace.scrollTop = workspace.scrollHeight;
@@ -569,6 +595,10 @@
     function addToolCard({ title, source, answer }) {
       const row = document.createElement("div");
       row.className = "message-row agent";
+      const isLocal = source === "local";
+      const authText = isLocal ? "无需资源令牌 TR" : "校验 TR 与策略";
+      const mcpText = isLocal ? "本地生成回答" : "调用 Mock MCP";
+      const mcpStatus = isLocal ? "完成" : "已返回";
       row.innerHTML = `
         <div class="bot-icon"><span class="material-symbols-outlined">precision_manufacturing</span></div>
         <div class="tool-card">
@@ -585,12 +615,12 @@
               <span>完成</span>
             </div>
             <div class="step">
-              <div class="step-left"><span class="material-symbols-outlined ok">verified_user</span><span>校验 TR 与策略</span></div>
-              <span>通过</span>
+              <div class="step-left"><span class="material-symbols-outlined ok">verified_user</span><span>${authText}</span></div>
+              <span>${isLocal ? "跳过" : "通过"}</span>
             </div>
             <div class="step">
-              <div class="step-left"><span class="material-symbols-outlined ok">hub</span><span>调用 Mock MCP</span></div>
-              <span>已返回</span>
+              <div class="step-left"><span class="material-symbols-outlined ok">hub</span><span>${mcpText}</span></div>
+              <span>${mcpStatus}</span>
             </div>
             <div class="bubble" style="max-width:100%; margin-top:6px;">${escapeHtml(answer)}</div>
           </div>
@@ -598,6 +628,182 @@
       `;
       stream.appendChild(row);
       scrollToBottom();
+    }
+
+    function delay(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function inferTools(message) {
+      const normalized = (message || "").toLowerCase();
+      const tools = [];
+      toolCatalog.forEach((tool) => {
+        if (tool.match.some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+          tools.push(tool);
+        }
+      });
+      return tools;
+    }
+
+    function createProcessingCard(message) {
+      const tools = inferTools(message);
+      const row = document.createElement("div");
+      row.className = "message-row agent";
+      row.innerHTML = `
+        <div class="bot-icon"><span class="material-symbols-outlined">psychology</span></div>
+        <div class="tool-card">
+          <div class="tool-header">
+            <div class="tool-title">
+              <span class="material-symbols-outlined">auto_awesome</span>
+              <span>任务处理中</span>
+            </div>
+            <span class="source-tag">MODEL</span>
+          </div>
+          <div class="tool-body">
+            <div class="step" data-step="understand">
+              <div class="step-left"><span class="material-symbols-outlined active">radio_button_checked</span><span>理解用户问题</span></div>
+              <span>进行中</span>
+            </div>
+            <div class="step" data-step="plan">
+              <div class="step-left"><span class="material-symbols-outlined pending">schedule</span><span>生成任务计划</span></div>
+              <span>等待</span>
+            </div>
+            <div class="step" data-step="route">
+              <div class="step-left"><span class="material-symbols-outlined pending">schedule</span><span>选择候选能力</span></div>
+              <span>等待</span>
+            </div>
+            <div class="step" data-step="tool">
+              <div class="step-left"><span class="material-symbols-outlined pending">schedule</span><span>判断是否需要外部工具</span></div>
+              <span>等待</span>
+            </div>
+            <div class="step" data-step="cache">
+              <div class="step-left"><span class="material-symbols-outlined pending">schedule</span><span>检查本地 TR 缓存</span></div>
+              <span>等待</span>
+            </div>
+            <div class="step" data-step="auth">
+              <div class="step-left"><span class="material-symbols-outlined pending">schedule</span><span>检查授权与资源令牌</span></div>
+              <span>等待</span>
+            </div>
+          </div>
+        </div>
+      `;
+      stream.appendChild(row);
+      scrollToBottom();
+
+      function setStep(name, icon, text, status, cssClass = "ok") {
+        const step = row.querySelector(`[data-step="${name}"]`);
+        step.innerHTML = `
+          <div class="step-left"><span class="material-symbols-outlined ${cssClass}">${icon}</span><span>${escapeHtml(text)}</span></div>
+          <span>${escapeHtml(status)}</span>
+        `;
+        scrollToBottom();
+      }
+
+      return {
+        tools,
+        async playBeforeRequest() {
+          await delay(900);
+          setStep("understand", "check_circle", "已理解问题意图", "完成");
+          setStep("plan", "radio_button_checked", "生成任务计划", "进行中", "active");
+          await delay(950);
+          setStep("plan", "check_circle", "已生成任务计划", "完成");
+          setStep("route", "radio_button_checked", "选择候选能力", "进行中", "active");
+          await delay(900);
+          setStep("route", "check_circle", "已选择候选能力", "完成");
+          setStep("tool", "radio_button_checked", "判断是否需要外部工具", "进行中", "active");
+          await delay(1050);
+          if (tools.length) {
+            const toolNames = tools.map((tool) => tool.label).join("、");
+            setStep("tool", "construction", `发现需要调用 ${toolNames}`, "待校验", "pending");
+            setStep("cache", "radio_button_checked", "检查本地 TR 缓存", "进行中", "active");
+            await delay(900);
+            setStep("cache", "sync_problem", "当前会话未发现可复用 TR", "需申请", "pending");
+            setStep("auth", "radio_button_checked", "检查授权与资源令牌", "进行中", "active");
+            await delay(900);
+          } else {
+            setStep("tool", "check_circle", "无需调用外部 MCP 工具", "完成");
+            setStep("cache", "check_circle", "无需检查 TR 缓存", "跳过");
+            setStep("auth", "check_circle", "无需申请资源令牌", "跳过");
+          }
+        },
+        markRedirect() {
+          setStep("auth", "key", "当前工具需要用户授权，正在准备授权上下文", "准备跳转", "pending");
+        },
+        markAuthorized(source) {
+          const label = source === "local" ? "本地回答无需授权" : source === "cache" ? "命中本地 TR 缓存" : "已完成授权校验";
+          if (source === "cache") {
+            setStep("cache", "check_circle", "命中本地 TR 缓存", "完成");
+          } else if (source === "gateway") {
+            setStep("cache", "sync_problem", "本地 TR 缓存未覆盖本次工具", "已新取");
+          }
+          setStep("auth", "verified_user", label, source === "local" ? "跳过" : "通过");
+        },
+        markError() {
+          setStep("auth", "error", "任务处理失败", "失败", "pending");
+        }
+      };
+    }
+
+    function createResumeProcessingCard(message) {
+      const tools = inferTools(message);
+      const row = document.createElement("div");
+      row.className = "message-row agent";
+      row.innerHTML = `
+        <div class="bot-icon"><span class="material-symbols-outlined">task_alt</span></div>
+        <div class="tool-card">
+          <div class="tool-header">
+            <div class="tool-title">
+              <span class="material-symbols-outlined">play_circle</span>
+              <span>继续执行任务</span>
+            </div>
+            <span class="source-tag">RESUME</span>
+          </div>
+          <div class="tool-body">
+            <div class="step" data-step="auth">
+              <div class="step-left"><span class="material-symbols-outlined ok">verified_user</span><span>授权已完成，TR 已写入本地缓存</span></div>
+              <span>通过</span>
+            </div>
+            <div class="step" data-step="tool">
+              <div class="step-left"><span class="material-symbols-outlined active">radio_button_checked</span><span>${escapeHtml(tools.length ? `继续调用 ${tools.map((tool) => tool.label).join("、")}` : "继续执行本地回答")}</span></div>
+              <span>进行中</span>
+            </div>
+            <div class="step" data-step="answer">
+              <div class="step-left"><span class="material-symbols-outlined pending">schedule</span><span>整理工具结果并生成回答</span></div>
+              <span>等待</span>
+            </div>
+          </div>
+        </div>
+      `;
+      stream.appendChild(row);
+      scrollToBottom();
+
+      function setStep(name, icon, text, status, cssClass = "ok") {
+        const step = row.querySelector(`[data-step="${name}"]`);
+        step.innerHTML = `
+          <div class="step-left"><span class="material-symbols-outlined ${cssClass}">${icon}</span><span>${escapeHtml(text)}</span></div>
+          <span>${escapeHtml(status)}</span>
+        `;
+        scrollToBottom();
+      }
+
+      return {
+        async playBeforeRequest() {
+          await delay(900);
+          setStep("tool", "hub", tools.length ? "工具调用已继续执行" : "本地任务已继续执行", "完成");
+          setStep("answer", "radio_button_checked", "整理工具结果并生成回答", "进行中", "active");
+          await delay(950);
+        },
+        markRedirect() {
+          setStep("auth", "key", "仍需要补充授权", "准备跳转", "pending");
+        },
+        markAuthorized(source) {
+          const label = source === "cache" ? "使用授权后写入的 TR 缓存" : "已完成授权校验";
+          setStep("answer", "check_circle", label, "完成");
+        },
+        markError() {
+          setStep("answer", "error", "继续执行失败", "失败", "pending");
+        }
+      };
     }
 
     function addAuthorizationCard() {
@@ -661,12 +867,15 @@
       return "请求失败，状态码：" + response.status;
     }
 
-    async function sendMessage(message) {
-      addUserMessage(message);
-      addAgentMessage("正在分析问题，并判断是否需要新的资源令牌 TR...", { icon: "psychology" });
+    async function sendMessage(message, options = {}) {
+      if (!options.resume) {
+        addUserMessage(message);
+      }
       setBusy(true);
+      const processing = options.resume ? createResumeProcessingCard(message) : createProcessingCard(message);
 
       try {
+        await processing.playBeforeRequest();
         const response = await fetch("/chat/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -674,26 +883,33 @@
         });
 
         if (response.status === 401) {
+          processing.markError();
           addAgentMessage("当前登录态已失效，正在跳转到登录入口。", { icon: "login", error: true });
+          await delay(700);
           window.location.href = "/agent";
           return;
         }
 
         if (!response.ok) {
+          processing.markError();
           addAgentMessage(await readErrorMessage(response), { icon: "error", error: true });
           return;
         }
 
         const payload = await response.json();
         if (payload.status === "redirect") {
+          processing.markRedirect();
           tokenStatus.textContent = "等待授权";
           sessionStorage.setItem("pending:" + payload.state, message);
           addAuthorizationCard();
+          await delay(1700);
           window.location.href = payload.redirectUrl;
           return;
         }
 
+        processing.markAuthorized(payload.source);
         tokenStatus.textContent = payload.source === "cache" ? "命中缓存" : "已获取";
+        await delay(760);
         addToolCard({
           title: inferTitle(message),
           source: payload.source,
@@ -736,8 +952,8 @@
       sessionStorage.removeItem(key);
       history.replaceState({}, "", "/agent.html");
       messageInput.value = pendingMessage;
-      addAgentMessage("授权已完成，正在恢复授权前的消息并继续执行。", { icon: "task_alt" });
-      await sendMessage(pendingMessage);
+      addAgentMessage("授权已完成，继续执行刚才的任务。", { icon: "task_alt" });
+      await sendMessage(pendingMessage, { resume: true });
     }
 
     sendButton.addEventListener("click", async () => {
