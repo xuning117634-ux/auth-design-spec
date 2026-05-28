@@ -1,16 +1,16 @@
 # A2A 委托授权与 Agent 安全方案
 
-本文面向方案讲解，重点说明从“用户授权单个 Agent”扩展到“Agent A 委托 Agent B 执行子任务”时，如何处理人在环授权、委托凭据、运行时鉴权和审计。
+本文说明从“用户授权单个 Agent”扩展到“Agent A 委托 Agent B 执行子任务”时，人在环授权、委托凭据、运行时鉴权和审计的整体设计。
 
-## 1. 领导版结论
+## 1. 方案概述
 
-A2A 不是让 Agent A 把自己的 `TR` 直接转发给 Agent B，而是由 Agent 网关统一生成、校验和审计一条清晰的委托链路：
+A2A 不采用 Agent A 直接转发自身 `TR` 给 Agent B 的方式，而是由 Agent 网关统一生成、校验和审计一条清晰的委托链路：
 
 ```text
 用户 U -> Agent A -> Agent B -> MCP 工具/资源
 ```
 
-核心口径：
+设计原则：
 
 - 用户授权仍然是根权限来源。
 - Agent A 是用户当前会话和人在环交互的承接方。
@@ -19,9 +19,9 @@ A2A 不是让 Agent A 把自己的 `TR` 直接转发给 Agent B，而是由 Agen
 - Agent 网关负责授权申请单、授权页、授权结果、委托策略校验、短期 `delegated_TR` 签发和审计。
 - 最终 `delegated_TR` 只发给 Agent B，`aud=B`，不经过浏览器，也不由 Agent A 转交。
 
-## 2. 为什么单 Agent 授权不能直接套用 A2A
+## 2. 单 Agent 授权方案的局限
 
-当前单 Agent 场景比较清晰：
+当前单 Agent 场景中：
 
 ```text
 用户 U 授权 Agent A 使用某些权限点，Agent A 持有 aud=A 的 TR 调 MCP。
@@ -33,7 +33,7 @@ A2A 场景多了一层委托关系：
 用户 U 正在使用 Agent A，但具体子任务由 Agent B 执行。
 ```
 
-如果 Agent A 直接把自己的 `TR` 交给 Agent B，会产生问题：
+如果 Agent A 直接把自己的 `TR` 交给 Agent B，存在以下风险：
 
 - `TR.aud=A`，但真实执行者是 B，身份语义错位。
 - MCP 和资源侧只能看到 `用户 -> A`，看不到 `用户 -> A -> B`。
@@ -76,17 +76,17 @@ flowchart LR
     MCP --> Tool
 ```
 
-## 5. A2A 授权申请单是什么
+## 5. A2A 授权申请单定义
 
 `A2A 授权申请单` 是 Agent B 在运行时创建的一张标准化记录，用来表达：
 
 ```text
-我在执行 Agent A 委托的某个子任务时，发现继续执行需要用户补充授权。
+Agent B 在执行 Agent A 委托的子任务时，发现继续执行需要用户补充授权。
 ```
 
 它不是最终授权结果，也不是 `TR`。它的作用是把缺权限事件登记到 Agent 网关，形成后续授权、恢复和审计的锚点。
 
-建议字段：
+参考字段：
 
 ```json
 {
@@ -183,9 +183,35 @@ sequenceDiagram
     A-->>U: 汇总回复
 ```
 
-## 8. Agent A 为什么需要固定钩子
+为便于快速理解，下面给出不展开接口细节的简化时序：
 
-Agent A 不应该靠大模型自然语言理解 Agent B 返回的“我缺权限”。A2A 必须是协议级中间态。
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant A as Agent A
+    participant B as Agent B
+    participant GW as Agent 网关
+    participant MCP as MCP / 工具
+
+    U->>A: 提出任务
+    A->>B: 委托子任务
+    B->>MCP: 执行时发现需要额外权限
+    B->>GW: 登记 A2A 授权申请单
+    B-->>A: 返回需要用户授权
+    A-->>U: 说明 B 需要什么权限
+    U->>GW: 在授权页确认或拒绝
+    GW-->>A: 告知授权结果
+    A->>B: 通知继续或终止
+    B->>GW: 授权通过后领取短期委托凭据
+    B->>MCP: 继续调用工具
+    B-->>A: 返回子任务结果
+    A-->>U: 汇总最终结果
+```
+
+## 8. Agent A 固定钩子机制
+
+Agent A 不能依赖模型对自然语言响应进行推断。A2A 缺权限必须表达为协议级中间态，由固定 SDK/钩子处理。
 
 Agent B 返回：
 
@@ -331,8 +357,8 @@ effective_scopes =
 - 默认只允许一跳委托；多跳委托需要显式策略开启。
 - 所有运行时调用必须能审计到 `user -> A -> B -> tool/resource`。
 
-## 14. 对领导可讲的三句话
+## 14. 方案要点总结
 
 1. 单 Agent 授权解决的是“用户能不能让这个 Agent 访问资源”；A2A 解决的是“这个 Agent 能不能再委托另一个 Agent 替用户做事”。
-2. 我们不让 Agent 之间互相转发用户令牌，而是由 Agent 网关生成一次性、短期、定向的委托凭据，确保权限不扩张、链路可审计。
+2. Agent 之间不直接转发用户令牌，由 Agent 网关生成一次性、短期、定向的委托凭据，确保权限不扩张、链路可审计。
 3. Agent B 只有在真正规划到具体工具时才知道缺什么权限；这时它创建授权申请单，Agent A 负责把用户带入授权，Agent 网关负责最终授权结果和凭据签发。
