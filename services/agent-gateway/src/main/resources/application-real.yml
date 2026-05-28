@@ -2,6 +2,8 @@ gateway:
   self-base-url: ${GATEWAY_SELF_BASE_URL:http://localhost:18080}
   secure-cookies: false
   insecure-skip-tls-verify: ${GATEWAY_INSECURE_SKIP_TLS_VERIFY:true}
+  tr-cookie-resolve-auth-header-name: X-Agent-Gateway-Internal-Token
+  tr-cookie-resolve-auth-header-value: ${GATEWAY_TR_COOKIE_RESOLVE_TOKEN:}
 
 providers:
   idaas:

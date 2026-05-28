@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.huawei.it.roma.liveeda.demoagent.config.DemoAgentProperties;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -37,10 +38,19 @@ public class AgentGatewayClient {
                 .body(GatewayTokenResponse.class);
     }
 
-    public GatewayTokenResponse exchangeTokenResult(String agentId, String requestId, String tokenResultTicket) {
+    public GatewayTokenResponse exchangeTokenResult(
+            String agentId,
+            String requestId,
+            String tokenResultTicket,
+            String cookieHeader
+    ) {
         RestClient restClient = restClientBuilder.baseUrl(properties.getGatewayBaseUrl()).build();
-        return restClient.post()
-                .uri("/gw/token/result/exchange")
+        RestClient.RequestBodySpec requestSpec = restClient.post()
+                .uri("/gw/token/result/exchange");
+        if (cookieHeader != null && !cookieHeader.isBlank()) {
+            requestSpec.header(HttpHeaders.COOKIE, cookieHeader);
+        }
+        return requestSpec
                 .body(new TokenResultExchangeRequest(agentId, requestId, tokenResultTicket))
                 .retrieve()
                 .body(GatewayTokenResponse.class);

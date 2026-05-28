@@ -118,7 +118,12 @@ class DemoAgentServiceTest {
 
     @Test
     void shouldExchangeTokenResultTicketAndReuseCachedTr() {
-        when(agentGatewayClient.exchangeTokenResult("agt_business_001", "req_001", "trt_001"))
+        when(agentGatewayClient.exchangeTokenResult(
+                "agt_business_001",
+                "req_001",
+                "trt_001",
+                "demo_resource_session=" + siteSession.siteSessionId()
+        ))
                 .thenReturn(new GatewayTokenResponse(
                         "tr_demo_001",
                         1800L,
@@ -133,7 +138,7 @@ class DemoAgentServiceTest {
         when(mockMcpGatewayClient.invoke(eq("agt_business_001"), eq("tr_demo_001"), anySet(), anyString()))
                 .thenReturn("mock contract result");
 
-        demoAgentService.exchangeTokenResult(siteSession.siteSessionId(), "req_001", "trt_001");
+        demoAgentService.exchangeTokenResult(siteSession.siteSessionId(), "req_001", "trt_001", null);
         ChatResponse response = demoAgentService.handleChat(siteSession.siteSessionId(), "show contract");
 
         assertEquals("answer", response.status());

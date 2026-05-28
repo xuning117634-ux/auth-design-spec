@@ -22,4 +22,8 @@ public class AgentGatewayProperties {
 
     @NotBlank
     private String defaultUsername;
+
+    private String trCookieResolveAuthHeaderName = "X-Agent-Gateway-Internal-Token";
+
+    private String trCookieResolveAuthHeaderValue;
 }

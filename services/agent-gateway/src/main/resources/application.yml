@@ -19,6 +19,8 @@ gateway:
   insecure-skip-tls-verify: false
   default-user-id: z01062668
   default-username: demo.user
+  tr-cookie-resolve-auth-header-name: X-Agent-Gateway-Internal-Token
+  tr-cookie-resolve-auth-header-value:
 
 mock-token:
   jwt-secret: changeit-changeit-changeit

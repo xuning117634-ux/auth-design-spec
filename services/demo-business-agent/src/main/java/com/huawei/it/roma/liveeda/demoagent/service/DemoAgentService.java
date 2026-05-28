@@ -54,19 +54,32 @@ public class DemoAgentService {
         return createSiteSession(response.user().userId(), response.user().username());
     }
 
-    public void exchangeTokenResult(String siteSessionId, String requestId, String tokenResultTicket) {
+    public void exchangeTokenResult(
+            String siteSessionId,
+            String requestId,
+            String tokenResultTicket,
+            String cookieHeader
+    ) {
         SiteSession siteSession = siteSessionStore.find(siteSessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "当前站点会话不存在，请重新登录"));
         GatewayTokenResponse response = agentGatewayClient.exchangeTokenResult(
                 properties.getAgentId(),
                 requestId,
-                tokenResultTicket
+                tokenResultTicket,
+                ensureDemoResourceCookie(siteSession, cookieHeader)
         );
         if (response == null || !response.isTokenReady()) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Agent 网关未返回可用的资源令牌");
         }
         ensureSameUser(siteSession, response);
         saveTrCache(siteSession, response);
+    }
+
+    private String ensureDemoResourceCookie(SiteSession siteSession, String cookieHeader) {
+        if (cookieHeader != null && !cookieHeader.isBlank()) {
+            return cookieHeader;
+        }
+        return "demo_resource_session=" + siteSession.siteSessionId();
     }
 
     public void logout(String siteSessionId) {

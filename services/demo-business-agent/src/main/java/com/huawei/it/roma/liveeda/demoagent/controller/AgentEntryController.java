@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -68,7 +69,8 @@ public class AgentEntryController {
             @RequestParam(name = "token_result_ticket", required = false) String tokenResultTicket,
             @RequestParam(name = "request_id", required = false) String requestId,
             @RequestParam(name = "state", required = false) String state,
-            @CookieValue(name = DemoAgentService.SITE_SESSION_COOKIE, required = false) String siteSessionId
+            @CookieValue(name = DemoAgentService.SITE_SESSION_COOKIE, required = false) String siteSessionId,
+            @RequestHeader(name = HttpHeaders.COOKIE, required = false) String cookieHeader
     ) {
         if (ticketST != null && !ticketST.isBlank()) {
             SiteSession siteSession = demoAgentService.createSiteSessionFromTicket(ticketST);
@@ -97,7 +99,7 @@ public class AgentEntryController {
                         .toUri();
                 return ResponseEntity.status(HttpStatus.FOUND).location(loginRedirect).build();
             }
-            demoAgentService.exchangeTokenResult(siteSessionId, requestId, tokenResultTicket);
+            demoAgentService.exchangeTokenResult(siteSessionId, requestId, tokenResultTicket, cookieHeader);
             URI redirect = UriComponentsBuilder.fromHttpUrl(properties.getSelfBaseUrl() + "/agent.html")
                     .queryParamIfPresent("state", java.util.Optional.ofNullable(state))
                     .build(true)

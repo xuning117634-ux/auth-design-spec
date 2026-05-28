@@ -8,8 +8,10 @@ import com.huawei.it.roma.liveeda.auth.web.TokenResultExchangeRequest;
 import com.huawei.it.roma.liveeda.auth.web.TokenResultExchangeResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,8 +32,9 @@ public class ResourceTokenController {
 
     @PostMapping("/result/exchange")
     public TokenResultExchangeResponse exchangeTokenResult(
-            @Valid @RequestBody TokenResultExchangeRequest request
+            @Valid @RequestBody TokenResultExchangeRequest request,
+            @RequestHeader(name = HttpHeaders.COOKIE, required = false) String cookieHeader
     ) {
-        return gatewayAuthService.exchangeTokenResult(request);
+        return gatewayAuthService.exchangeTokenResult(request, cookieHeader);
     }
 }

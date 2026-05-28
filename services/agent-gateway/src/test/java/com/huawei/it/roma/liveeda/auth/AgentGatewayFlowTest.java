@@ -24,6 +24,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -167,7 +168,8 @@ class AgentGatewayFlowTest {
         Map<String, String> consentRedirectParams = queryParams(businessConsentRedirect);
         String tokenResultTicket = consentRedirectParams.get("token_result_ticket");
 
-        mockMvc.perform(post("/gw/token/result/exchange")
+        MvcResult tokenExchangeResult = mockMvc.perform(post("/gw/token/result/exchange")
+                        .header(HttpHeaders.COOKIE, "SESSION=resource_cookie_001; token=resource_token_001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -180,7 +182,35 @@ class AgentGatewayFlowTest {
                 .andExpect(jsonPath("$.status").value("TOKEN_READY"))
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.expiresIn").isNumber())
-                .andExpect(jsonPath("$.consentedScopes[0]").value("erp:contract:r"));
+                .andExpect(jsonPath("$.consentedScopes[0]").value("erp:contract:r"))
+                .andReturn();
+
+        String trToken = objectMapper.readTree(tokenExchangeResult.getResponse().getContentAsString())
+                .get("accessToken")
+                .asText();
+
+        mockMvc.perform(post("/internal/v1/tr-cookie/resolve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agent_id": "agt_business_001",
+                                  "tr": "%s"
+                                }
+                                """.formatted(trToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.found").value(true))
+                .andExpect(jsonPath("$.cookie").value("SESSION=resource_cookie_001; token=resource_token_001"))
+                .andExpect(jsonPath("$.expiresIn").isNumber());
+
+        mockMvc.perform(post("/internal/v1/tr-cookie/resolve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "agent_id": "other_agent",
+                                  "tr": "%s"
+                                }
+                                """.formatted(trToken)))
+                .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/gw/token/result/exchange")
                         .contentType(MediaType.APPLICATION_JSON)

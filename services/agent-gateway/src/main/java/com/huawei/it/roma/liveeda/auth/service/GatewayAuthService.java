@@ -49,6 +49,7 @@ public class GatewayAuthService {
     private final IamAssumeAgentTokenClient iamAssumeAgentTokenClient;
     private final IamResourceTokenClient iamResourceTokenClient;
     private final ReturnUrlValidator returnUrlValidator;
+    private final ResourceCookieService resourceCookieService;
     private final IdGenerator idGenerator;
     private final Clock clock;
 
@@ -148,7 +149,7 @@ public class GatewayAuthService {
                 .toUri();
     }
 
-    public TokenResultExchangeResponse exchangeTokenResult(TokenResultExchangeRequest request) {
+    public TokenResultExchangeResponse exchangeTokenResult(TokenResultExchangeRequest request, String cookieHeader) {
         TokenResultTicket ticket = tokenResultTicketStore.find(request.tokenResultTicket())
                 .orElseThrow(() -> new GatewayException(HttpStatus.UNAUTHORIZED,
                         "token_result_ticket does not exist or has expired"));
@@ -159,6 +160,7 @@ public class GatewayAuthService {
             throw new GatewayException(HttpStatus.UNAUTHORIZED, "token_result_ticket does not belong to request_id");
         }
         tokenResultTicketStore.delete(ticket.tokenResultTicket());
+        resourceCookieService.cacheCookie(ticket.agentId(), ticket.trToken(), ticket.expiresAt(), cookieHeader);
 
         long expiresIn = Math.max(0, ticket.expiresAt().getEpochSecond() - clock.instant().getEpochSecond());
         return new TokenResultExchangeResponse(
