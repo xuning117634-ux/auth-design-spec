@@ -9,6 +9,19 @@
 - 后续 AI 或团队成员先读本文件，再按 [README.md](./README.md) 定位相关文档。
 - 如果只是修错别字、调整排版、补充不改变口径的说明，可以不记录。
 
+## 2026-05-28
+
+### 新增 A2A 委托授权与 Agent 安全方案
+
+- 变化内容：新增 A2A 场景设计说明，明确用户在 Agent A 会话中委托 Agent B 执行子任务时的授权、人机交互、凭据签发和审计口径。
+- 关键口径：A2A 不允许 Agent A 将自身 `TR` 直接转发给 Agent B；Agent B 最终使用面向自身 `aud=B` 的短期 `delegated_TR`。
+- 关键口径：Agent 网关位于 Agent A 与 Agent B 之间，承接 A2A 标准协议通讯、流量代理、授权代理和链路审计。
+- 关键口径：Agent A 不需要预知 Agent B 的具体工具调用；Agent B 在运行时发现缺少权限点后，将所需工具、权限点、任务上下文等缺权限授权信息返回给 Agent A。
+- 关键口径：Agent A 通过固定 A2A SDK/钩子承接 `AUTH_REQUIRED` 中间态，并请求 Agent 网关发起人在环授权；Agent B 不在 Agent 网关侧创建持久授权申请记录。
+- 关键口径：Agent 网关负责授权页、IDaaS/IAM 交互、委托策略校验、`delegated_TR` 签发和完整审计链路；长期授权记录仍由 IDaaS 作为权威保存。
+- 影响文档：`10_A2A委托授权与Agent安全方案.md`、`README.md`。
+- 影响代码：当前仅为方案设计；后续代码影响预计涉及 Agent 网关 A2A 授权接口、Agent A/B A2A SDK 钩子、MCP 网关运行时校验。
+
 ## 2026-05-08
 
 ### 通用权限模型收口为 PARC，并预留 Cedar 编译路径
