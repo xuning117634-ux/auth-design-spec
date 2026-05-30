@@ -86,13 +86,13 @@ public class RealIamAssumeAgentTokenClient implements IamAssumeAgentTokenClient 
 
     private record AssumeAgentTokenAttributes(String delegatorAccountName, String delegatorAppid) {
         @Override
-        @JsonProperty("delegator_account_name")
+        @JsonProperty("principal_account_name")
         public String delegatorAccountName() {
             return delegatorAccountName;
         }
 
         @Override
-        @JsonProperty("delegator_appid")
+        @JsonProperty("principal_appid")
         public String delegatorAppid() {
             return delegatorAppid;
         }
