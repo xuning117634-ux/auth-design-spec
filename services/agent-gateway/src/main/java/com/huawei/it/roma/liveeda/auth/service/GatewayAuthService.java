@@ -20,6 +20,7 @@ import com.huawei.it.roma.liveeda.auth.store.PendingAuthTransactionStore;
 import com.huawei.it.roma.liveeda.auth.store.PendingBaseLoginStore;
 import com.huawei.it.roma.liveeda.auth.store.TokenResultTicketStore;
 import com.huawei.it.roma.liveeda.auth.util.IdGenerator;
+import com.huawei.it.roma.liveeda.auth.util.LogSanitizer;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import com.huawei.it.roma.liveeda.auth.web.LoginTicketExchangeRequest;
 import com.huawei.it.roma.liveeda.auth.web.LoginTicketExchangeResponse;
@@ -29,12 +30,14 @@ import java.net.URI;
 import java.time.Clock;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class GatewayAuthService {
 
     private final AgentGatewayProperties properties;
@@ -58,7 +61,10 @@ public class GatewayAuthService {
         URI validatedReturnUrl = returnUrlValidator.validate(agentRegistryEntry, returnUrl);
         String gwState = idGenerator.next("gw_state");
         pendingBaseLoginStore.save(new PendingBaseLogin(gwState, agentId, validatedReturnUrl, outerState));
-        return idaasAuthorizeSupport.buildBaseAuthorizationUri(agentId, gwState);
+        URI redirectUri = idaasAuthorizeSupport.buildBaseAuthorizationUri(agentId, gwState);
+        log.info("base login prepared, agentId={}, appId={}, gwStateTail={}, redirectHost={}",
+                agentId, agentRegistryEntry.appId(), LogSanitizer.tail(gwState), LogSanitizer.host(redirectUri));
+        return redirectUri;
     }
 
     public URI handleBaseCallback(String code, String gwState) {
@@ -77,27 +83,36 @@ public class GatewayAuthService {
                 clock.instant()
         ));
 
-        return UriComponentsBuilder.fromUri(pendingBaseLogin.returnUrl())
+        URI redirectUri = UriComponentsBuilder.fromUri(pendingBaseLogin.returnUrl())
                 .queryParam("ticketST", ticketST)
                 .queryParam("state", pendingBaseLogin.outerState())
                 .build(true)
                 .toUri();
+        log.info("base callback completed, agentId={}, gwStateTail={}, ticketTail={}, redirectHost={}",
+                pendingBaseLogin.agentId(), LogSanitizer.tail(gwState), LogSanitizer.tail(ticketST),
+                LogSanitizer.host(redirectUri));
+        return redirectUri;
     }
 
     public LoginTicketExchangeResponse exchangeLoginTicket(LoginTicketExchangeRequest request) {
         LoginTicket ticket = loginTicketStore.find(request.ticketST())
                 .orElseThrow(() -> new GatewayException(HttpStatus.UNAUTHORIZED, "ticketST does not exist or has expired"));
         if (!ticket.agentId().equals(request.agentId())) {
+            log.warn("login ticket exchange rejected, reason=agent_mismatch, requestAgentId={}, ticketAgentId={}, ticketTail={}",
+                    request.agentId(), ticket.agentId(), LogSanitizer.tail(request.ticketST()));
             throw new GatewayException(HttpStatus.UNAUTHORIZED, "ticketST does not belong to current agent");
         }
 
         IssuedToken tc = idaasTokenClient.exchangeAuthorizationCode(ticket.authorizationCode(), ticket.redirectUri());
         BaseLoginResult userInfo = idaasTokenClient.fetchUserInfo(tc.accessToken());
         loginTicketStore.delete(ticket.ticketST());
+        long expiresIn = Math.max(0, tc.expiresAt().getEpochSecond() - clock.instant().getEpochSecond());
+        log.info("login ticket exchange completed, agentId={}, ticketTail={}, userId={}, expiresIn={}",
+                request.agentId(), LogSanitizer.tail(request.ticketST()), userInfo.userId(), expiresIn);
 
         return new LoginTicketExchangeResponse(
                 new LoginTicketExchangeResponse.UserInfo(userInfo.userId(), userInfo.uuid(), userInfo.username()),
-                Math.max(0, tc.expiresAt().getEpochSecond() - clock.instant().getEpochSecond())
+                expiresIn
         );
     }
 
@@ -106,12 +121,16 @@ public class GatewayAuthService {
                 .orElseThrow(() -> new GatewayException(HttpStatus.NOT_FOUND, "Unknown request_id"));
         String gwState = idGenerator.next("gw_state");
         pendingAuthTransactionStore.save(transaction.withGwState(gwState));
-        return idaasAuthorizeSupport.buildConsentAuthorizationUri(
+        URI redirectUri = idaasAuthorizeSupport.buildConsentAuthorizationUri(
                 transaction.agentId(),
                 gwState,
                 transaction.requiredPermissionPointCodes(),
                 transaction.subjectHint()
         );
+        log.info("consent authorization prepared, agentId={}, requestId={}, gwStateTail={}, permissionPoints={}, redirectHost={}",
+                transaction.agentId(), requestId, LogSanitizer.tail(gwState),
+                LogSanitizer.size(transaction.requiredPermissionPointCodes()), LogSanitizer.host(redirectUri));
+        return redirectUri;
     }
 
     public URI handleConsentCallback(String code, String gwState) {
@@ -141,12 +160,17 @@ public class GatewayAuthService {
                 clock.instant()
         ));
 
-        return UriComponentsBuilder.fromUri(transaction.returnUrl())
+        URI redirectUri = UriComponentsBuilder.fromUri(transaction.returnUrl())
                 .queryParam("token_result_ticket", tokenResultTicket)
                 .queryParam("request_id", transaction.requestId())
                 .queryParam("state", transaction.outerState())
                 .build(true)
                 .toUri();
+        log.info("consent callback completed, agentId={}, requestId={}, userId={}, permissionPoints={}, ticketTail={}, trExpiresAt={}, redirectHost={}",
+                transaction.agentId(), transaction.requestId(), authorizationResult.userId(),
+                LogSanitizer.size(authorizationResult.authorizedPermissionPointCodes()),
+                LogSanitizer.tail(tokenResultTicket), tr.expiresAt(), LogSanitizer.host(redirectUri));
+        return redirectUri;
     }
 
     public TokenResultExchangeResponse exchangeTokenResult(TokenResultExchangeRequest request, String cookieHeader) {
@@ -154,15 +178,22 @@ public class GatewayAuthService {
                 .orElseThrow(() -> new GatewayException(HttpStatus.UNAUTHORIZED,
                         "token_result_ticket does not exist or has expired"));
         if (!ticket.agentId().equals(request.agentId())) {
+            log.warn("token result exchange rejected, reason=agent_mismatch, requestAgentId={}, ticketAgentId={}, requestId={}",
+                    request.agentId(), ticket.agentId(), request.requestId());
             throw new GatewayException(HttpStatus.UNAUTHORIZED, "token_result_ticket does not belong to current agent");
         }
         if (!ticket.requestId().equals(request.requestId())) {
+            log.warn("token result exchange rejected, reason=request_mismatch, agentId={}, requestId={}, ticketRequestId={}",
+                    request.agentId(), request.requestId(), ticket.requestId());
             throw new GatewayException(HttpStatus.UNAUTHORIZED, "token_result_ticket does not belong to request_id");
         }
         tokenResultTicketStore.delete(ticket.tokenResultTicket());
         resourceCookieService.cacheCookie(ticket.agentId(), ticket.trToken(), ticket.expiresAt(), cookieHeader);
 
         long expiresIn = Math.max(0, ticket.expiresAt().getEpochSecond() - clock.instant().getEpochSecond());
+        log.info("token result exchange completed, agentId={}, requestId={}, ticketTail={}, cookiePresent={}, expiresIn={}, scopes={}",
+                ticket.agentId(), ticket.requestId(), LogSanitizer.tail(ticket.tokenResultTicket()),
+                LogSanitizer.present(cookieHeader), expiresIn, LogSanitizer.size(ticket.consentedScopes()));
         return new TokenResultExchangeResponse(
                 "TOKEN_READY",
                 ticket.requestId(),

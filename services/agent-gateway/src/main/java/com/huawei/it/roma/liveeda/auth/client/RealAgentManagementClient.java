@@ -3,12 +3,14 @@ package com.huawei.it.roma.liveeda.auth.client;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.huawei.it.roma.liveeda.auth.config.AgentManagementClientProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
+import com.huawei.it.roma.liveeda.auth.util.LogSanitizer;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import org.springframework.web.client.RestClient;
 @Component
 @Profile("real")
 @RequiredArgsConstructor
+@Slf4j
 public class RealAgentManagementClient implements AgentManagementClient {
 
     private final RestClient.Builder restClientBuilder;
@@ -27,20 +30,35 @@ public class RealAgentManagementClient implements AgentManagementClient {
     @Override
     public AgentRegistryEntry getGatewayProfile(String agentId) {
         RestClient restClient = restClientBuilder.baseUrl(properties.getBaseUrl()).build();
+        long startNanos = System.nanoTime();
+        log.info("agent management request started, operation=getGatewayProfile, baseUrl={}, agentId={}",
+                properties.getBaseUrl(), agentId);
         RequestHeadersSpec<?> request = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path(properties.getQueryByAgentIdPath())
                         .queryParam("agentId", agentId)
                         .build());
         applyConfiguredHeaders(request);
-        AgentMallResponse response = request
-                .retrieve()
-                .body(AgentMallResponse.class);
+        AgentMallResponse response;
+        try {
+            response = request
+                    .retrieve()
+                    .body(AgentMallResponse.class);
+        } catch (RuntimeException exception) {
+            log.error("agent management request failed, operation=getGatewayProfile, agentId={}, elapsedMs={}, error={}",
+                    agentId, LogSanitizer.elapsedMillis(startNanos), exception.getClass().getSimpleName(), exception);
+            throw exception;
+        }
         if (response == null || !"0000".equals(response.status()) || response.data() == null) {
+            log.warn("agent management returned invalid response, operation=getGatewayProfile, agentId={}, status={}, elapsedMs={}",
+                    agentId, response == null ? null : response.status(), LogSanitizer.elapsedMillis(startNanos));
             throw new GatewayException(HttpStatus.BAD_GATEWAY, "Agent management returned empty response");
         }
         AgentMallData data = response.data();
         validate(data, agentId);
+        log.info("agent management request completed, operation=getGatewayProfile, agentId={}, appId={}, permissionPoints={}, elapsedMs={}",
+                data.uniqueId(), data.appId(), LogSanitizer.size(data.subscriptionPermissionPoints()),
+                LogSanitizer.elapsedMillis(startNanos));
         return new AgentRegistryEntry(
                 data.uniqueId(),
                 data.name(),

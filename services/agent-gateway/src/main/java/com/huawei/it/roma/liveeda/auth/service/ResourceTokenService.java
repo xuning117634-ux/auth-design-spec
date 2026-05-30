@@ -8,6 +8,7 @@ import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.PendingAuthTransaction;
 import com.huawei.it.roma.liveeda.auth.store.PendingAuthTransactionStore;
 import com.huawei.it.roma.liveeda.auth.util.IdGenerator;
+import com.huawei.it.roma.liveeda.auth.util.LogSanitizer;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import com.huawei.it.roma.liveeda.auth.web.ResourceTokenRequest;
 import com.huawei.it.roma.liveeda.auth.web.ResourceTokenResponse;
@@ -15,12 +16,14 @@ import java.net.URI;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ResourceTokenService {
 
     private final AgentManagementClient agentManagementClient;
@@ -57,6 +60,10 @@ public class ResourceTokenService {
                 .build(true)
                 .toUriString();
 
+        log.info("resource token flow prepared, agentId={}, appId={}, requestId={}, requiredTools={}, permissionPoints={}, subjectHintKeys={}, redirectHost={}",
+                request.agentId(), agentRegistryEntry.appId(), requestId, LogSanitizer.size(requiredTools),
+                LogSanitizer.size(policyResolutionResult.requiredPermissionPointCodes()),
+                request.subjectHint() == null ? 0 : request.subjectHint().size(), LogSanitizer.host(redirectUrl));
         return ResourceTokenResponse.redirect(redirectUrl, requestId);
     }
 
@@ -65,6 +72,9 @@ public class ResourceTokenService {
             Set<String> requiredPermissionPointCodes
     ) {
         if (!agentRegistryEntry.hasSubscribedAll(requiredPermissionPointCodes)) {
+            log.warn("resource token subscription check failed, agentId={}, requiredPermissionPoints={}, subscribedPermissionPoints={}",
+                    agentRegistryEntry.agentId(), LogSanitizer.size(requiredPermissionPointCodes),
+                    LogSanitizer.size(agentRegistryEntry.subscribedPermissionPointCodes()));
             throw new GatewayException(
                     HttpStatus.FORBIDDEN,
                     "Agent has not subscribed all required permission points"

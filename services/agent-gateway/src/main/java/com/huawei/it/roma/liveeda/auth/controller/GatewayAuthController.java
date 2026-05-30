@@ -1,5 +1,6 @@
 package com.huawei.it.roma.liveeda.auth.controller;
 
+import com.huawei.it.roma.liveeda.auth.util.LogSanitizer;
 import com.huawei.it.roma.liveeda.auth.service.GatewayAuthService;
 import com.huawei.it.roma.liveeda.auth.web.LoginTicketExchangeRequest;
 import com.huawei.it.roma.liveeda.auth.web.LoginTicketExchangeResponse;
@@ -7,6 +8,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/gw/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class GatewayAuthController {
 
     private final GatewayAuthService gatewayAuthService;
@@ -31,6 +34,8 @@ public class GatewayAuthController {
             @RequestParam("return_url") @NotBlank String returnUrl,
             @RequestParam("state") @NotBlank String outerState
     ) {
+        log.info("gw auth login request received, agentId={}, returnHost={}, stateTail={}",
+                agentId, LogSanitizer.host(returnUrl), LogSanitizer.tail(outerState));
         URI redirectUri = gatewayAuthService.startBaseLogin(agentId, returnUrl, outerState);
         return ResponseEntity.status(HttpStatus.FOUND).location(redirectUri).build();
     }
@@ -40,15 +45,18 @@ public class GatewayAuthController {
             @RequestParam("code") @NotBlank String code,
             @RequestParam("state") @NotBlank String gwState
     ) {
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .location(gatewayAuthService.handleBaseCallback(code, gwState))
-                .build();
+        log.info("gw auth base callback received, codePresent={}, gwStateTail={}",
+                LogSanitizer.present(code), LogSanitizer.tail(gwState));
+        URI redirectUri = gatewayAuthService.handleBaseCallback(code, gwState);
+        return ResponseEntity.status(HttpStatus.FOUND).location(redirectUri).build();
     }
 
     @PostMapping("/ticket/exchange")
     public LoginTicketExchangeResponse exchangeLoginTicket(
             @Valid @RequestBody LoginTicketExchangeRequest request
     ) {
+        log.info("gw auth ticket exchange request received, agentId={}, ticketTail={}",
+                request.agentId(), LogSanitizer.tail(request.ticketST()));
         return gatewayAuthService.exchangeLoginTicket(request);
     }
 
@@ -56,6 +64,7 @@ public class GatewayAuthController {
     public ResponseEntity<Void> startConsentAuthorization(
             @RequestParam("request_id") @NotBlank String requestId
     ) {
+        log.info("gw auth consent authorization request received, requestId={}", requestId);
         URI redirectUri = gatewayAuthService.startConsentAuthorization(requestId);
         return ResponseEntity.status(HttpStatus.FOUND).location(redirectUri).build();
     }
@@ -65,6 +74,8 @@ public class GatewayAuthController {
             @RequestParam("code") @NotBlank String code,
             @RequestParam("state") @NotBlank String gwState
     ) {
+        log.info("gw auth consent callback received, codePresent={}, gwStateTail={}",
+                LogSanitizer.present(code), LogSanitizer.tail(gwState));
         URI redirectUri = gatewayAuthService.handleConsentCallback(code, gwState);
         return ResponseEntity.status(HttpStatus.FOUND).location(redirectUri).build();
     }

@@ -4,6 +4,7 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.huawei.it.roma.liveeda.auth.domain.ResourceCookieEntry;
 import com.huawei.it.roma.liveeda.auth.store.ResourceCookieStore;
+import com.huawei.it.roma.liveeda.auth.util.LogSanitizer;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import com.huawei.it.roma.liveeda.auth.web.TrCookieResolveRequest;
 import com.huawei.it.roma.liveeda.auth.web.TrCookieResolveResponse;
@@ -15,11 +16,13 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ResourceCookieService {
 
     private final ResourceCookieStore resourceCookieStore;
@@ -31,10 +34,14 @@ public class ResourceCookieService {
         }
         String tokenAudience = extractAudience(trToken);
         if (!agentId.equals(tokenAudience)) {
+            log.warn("resource cookie cache rejected, reason=aud_mismatch, agentId={}, tokenAudience={}",
+                    agentId, tokenAudience);
             throw new GatewayException(HttpStatus.UNAUTHORIZED, "TR aud does not match current agent");
         }
         Instant now = clock.instant();
         if (!trExpiresAt.isAfter(now)) {
+            log.info("resource cookie cache skipped, reason=tr_expired, agentId={}, trExpiresAt={}",
+                    agentId, trExpiresAt);
             return;
         }
         resourceCookieStore.save(new ResourceCookieEntry(
@@ -44,20 +51,27 @@ public class ResourceCookieService {
                 trExpiresAt,
                 now
         ));
+        log.info("resource cookie cached, agentId={}, trTail={}, expiresAt={}",
+                agentId, LogSanitizer.tail(trToken), trExpiresAt);
     }
 
     public TrCookieResolveResponse resolve(TrCookieResolveRequest request) {
         String tokenAudience = extractAudience(request.tr());
         if (!request.agentId().equals(tokenAudience)) {
+            log.warn("resource cookie resolve rejected, reason=aud_mismatch, agentId={}, tokenAudience={}",
+                    request.agentId(), tokenAudience);
             throw new GatewayException(HttpStatus.UNAUTHORIZED, "TR aud does not match current agent");
         }
-        return resourceCookieStore.find(request.agentId(), sha256(request.tr()), clock.instant())
+        TrCookieResolveResponse response = resourceCookieStore.find(request.agentId(), sha256(request.tr()), clock.instant())
                 .map(entry -> new TrCookieResolveResponse(
                         true,
                         entry.cookie(),
                         Math.max(0, entry.expiresAt().getEpochSecond() - clock.instant().getEpochSecond())
                 ))
                 .orElseGet(() -> new TrCookieResolveResponse(false, null, null));
+        log.info("resource cookie resolve completed, agentId={}, found={}, expiresIn={}",
+                request.agentId(), response.found(), response.expiresIn());
+        return response;
     }
 
     private String extractAudience(String trToken) {
