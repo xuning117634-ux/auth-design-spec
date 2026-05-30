@@ -247,6 +247,47 @@ class AgentGatewayFlowTest {
                 .andExpect(jsonPath("$.message").value("Agent has not subscribed all required permission points"));
     }
 
+    @Test
+    void shouldAppendBaseCallbackParamsInsideHashRouteReturnUrl() throws Exception {
+        MvcResult startLoginResult = mockMvc.perform(get("/gw/auth/login")
+                        .param("agent_id", "agt_business_001")
+                        .param("return_url", "http://localhost:18082/#/test")
+                        .param("state", "outer_login_state"))
+                .andExpect(status().isFound())
+                .andReturn();
+
+        URI mockIdaasBaseUri = URI.create(startLoginResult.getResponse().getRedirectedUrl());
+        Map<String, String> baseParams = queryParams(mockIdaasBaseUri);
+
+        MvcResult approveBaseResult = mockMvc.perform(post("/mock/idaas/approve")
+                        .param("flow", baseParams.get("flow"))
+                        .param("redirect_uri", baseParams.get("redirect_uri"))
+                        .param("scope", baseParams.get("scope"))
+                        .param("state", baseParams.get("state"))
+                        .param("user_id", "z01062668")
+                        .param("username", "demo.user")
+                        .param("password", "MockPassword@123"))
+                .andExpect(status().isFound())
+                .andReturn();
+
+        URI baseCallbackUri = URI.create(approveBaseResult.getResponse().getRedirectedUrl());
+        MvcResult baseCallbackResult = mockMvc.perform(get(baseCallbackUri.getPath())
+                        .queryParam("code", queryParams(baseCallbackUri).get("code"))
+                        .queryParam("state", queryParams(baseCallbackUri).get("state")))
+                .andExpect(status().isFound())
+                .andReturn();
+
+        String businessRedirect = baseCallbackResult.getResponse().getRedirectedUrl();
+        org.junit.jupiter.api.Assertions.assertTrue(
+                businessRedirect.startsWith("http://localhost:18082/#/test?ticketST="),
+                businessRedirect
+        );
+        org.junit.jupiter.api.Assertions.assertTrue(
+                businessRedirect.contains("&state=outer_login_state"),
+                businessRedirect
+        );
+    }
+
     private Map<String, String> queryParams(URI uri) {
         return UriComponentsBuilder.fromUri(uri)
                 .build()

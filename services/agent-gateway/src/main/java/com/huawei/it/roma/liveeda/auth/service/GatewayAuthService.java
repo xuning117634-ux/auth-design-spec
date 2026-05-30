@@ -21,6 +21,7 @@ import com.huawei.it.roma.liveeda.auth.store.PendingBaseLoginStore;
 import com.huawei.it.roma.liveeda.auth.store.TokenResultTicketStore;
 import com.huawei.it.roma.liveeda.auth.util.IdGenerator;
 import com.huawei.it.roma.liveeda.auth.util.LogSanitizer;
+import com.huawei.it.roma.liveeda.auth.util.ReturnUrlBuilder;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
 import com.huawei.it.roma.liveeda.auth.web.LoginTicketExchangeRequest;
 import com.huawei.it.roma.liveeda.auth.web.LoginTicketExchangeResponse;
@@ -28,12 +29,13 @@ import com.huawei.it.roma.liveeda.auth.web.TokenResultExchangeRequest;
 import com.huawei.it.roma.liveeda.auth.web.TokenResultExchangeResponse;
 import java.net.URI;
 import java.time.Clock;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 @RequiredArgsConstructor
@@ -83,11 +85,13 @@ public class GatewayAuthService {
                 clock.instant()
         ));
 
-        URI redirectUri = UriComponentsBuilder.fromUri(pendingBaseLogin.returnUrl())
-                .queryParam("ticketST", ticketST)
-                .queryParam("state", pendingBaseLogin.outerState())
-                .build(true)
-                .toUri();
+        URI redirectUri = ReturnUrlBuilder.appendParams(
+                pendingBaseLogin.returnUrl(),
+                orderedParams(
+                        "ticketST", ticketST,
+                        "state", pendingBaseLogin.outerState()
+                )
+        );
         log.info("base callback completed, agentId={}, gwStateTail={}, ticketTail={}, redirectHost={}",
                 pendingBaseLogin.agentId(), LogSanitizer.tail(gwState), LogSanitizer.tail(ticketST),
                 LogSanitizer.host(redirectUri));
@@ -160,12 +164,14 @@ public class GatewayAuthService {
                 clock.instant()
         ));
 
-        URI redirectUri = UriComponentsBuilder.fromUri(transaction.returnUrl())
-                .queryParam("token_result_ticket", tokenResultTicket)
-                .queryParam("request_id", transaction.requestId())
-                .queryParam("state", transaction.outerState())
-                .build(true)
-                .toUri();
+        URI redirectUri = ReturnUrlBuilder.appendParams(
+                transaction.returnUrl(),
+                orderedParams(
+                        "token_result_ticket", tokenResultTicket,
+                        "request_id", transaction.requestId(),
+                        "state", transaction.outerState()
+                )
+        );
         log.info("consent callback completed, agentId={}, requestId={}, userId={}, permissionPoints={}, ticketTail={}, trExpiresAt={}, redirectHost={}",
                 transaction.agentId(), transaction.requestId(), authorizationResult.userId(),
                 LogSanitizer.size(authorizationResult.authorizedPermissionPointCodes()),
@@ -206,6 +212,14 @@ public class GatewayAuthService {
                                 .map(com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint::code)
                                 .toList()
         );
+    }
+
+    private Map<String, String> orderedParams(String... values) {
+        Map<String, String> params = new LinkedHashMap<>();
+        for (int index = 0; index < values.length; index += 2) {
+            params.put(values[index], values[index + 1]);
+        }
+        return params;
     }
 
 }
