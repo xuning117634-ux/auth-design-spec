@@ -1,12 +1,12 @@
 # 内网 PC 本地部署 Agent 网关联调指南
 
-本文用于说明：只在内网 PC 本地启动 `agent-gateway`，其余模块使用开发环境已部署服务时，应该如何配置和启动。
+本文用于说明：只在内网 PC 本地启动 `auth-gateway`，其余模块使用开发环境已部署服务时，应该如何配置和启动。
 
 ## 1. 部署目标
 
 本地只启动：
 
-- `services/agent-gateway`
+- `services/auth-gateway`
 
 开发环境使用：
 
@@ -44,7 +44,7 @@ Test-NetConnection apig-beta.his.huawei.com -Port 443
 Agent 网关的开发环境配置在：
 
 ```text
-services/agent-gateway/src/main/resources/application-real.yml
+services/auth-gateway/src/main/resources/application-real.yml
 ```
 
 该文件已经写入以下非密钥配置：
@@ -137,7 +137,7 @@ $env:GATEWAY_SELF_BASE_URL="http://<你的内网PC-IP>:18080"
 在仓库根目录执行：
 
 ```powershell
-mvn -f services/agent-gateway/pom.xml spring-boot:run
+mvn -f services/auth-gateway/pom.xml spring-boot:run
 ```
 
 启动成功后检查健康状态：
@@ -255,7 +255,7 @@ $env:GATEWAY_INSECURE_SKIP_TLS_VERIFY="true"
 # 仅当开发环境业务 Agent 后端要访问本机网关时需要配置
 $env:GATEWAY_SELF_BASE_URL="http://<你的内网PC-IP>:18080"
 
-mvn -f services/agent-gateway/pom.xml spring-boot:run
+mvn -f services/auth-gateway/pom.xml spring-boot:run
 ```
 
 ## 10. 本机同时启动 Demo Agent
@@ -283,7 +283,7 @@ http://localhost:18082/agent
 
 ```text
 本地 demo-business-agent
-  -> 本地 agent-gateway
+  -> 本地 auth-gateway
   -> 开发环境 IDaaS / IAM / 策略中心 / Agent 管理面
   -> 本地 mock MCP 返回演示结果
 ```

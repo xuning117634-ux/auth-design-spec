@@ -10,10 +10,10 @@
     <packaging>pom</packaging>
 
     <name>auth-design-spec</name>
-    <description>Aggregator project for agent-gateway, policy-center, and demo-business-agent</description>
+    <description>Aggregator project for auth-gateway, policy-center, and demo-business-agent</description>
 
     <modules>
-        <module>services/agent-gateway</module>
+        <module>services/auth-gateway</module>
         <module>services/policy-center</module>
         <module>services/demo-business-agent</module>
     </modules>

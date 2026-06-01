@@ -3,7 +3,7 @@
 
 这份说明只覆盖 `services` 目录下的 3 个应用：
 
-- `agent-gateway`
+- `auth-gateway`
 - `policy-center`
 - `demo-business-agent`
 
@@ -14,7 +14,7 @@
 建议按下面顺序启动：
 
 1. `policy-center`
-2. `agent-gateway`
+2. `auth-gateway`
 3. `demo-business-agent`
 
 ## 3. 本地 mock 模式启动
@@ -31,7 +31,7 @@ mvn spring-boot:run
 ### 3.2 启动 Agent 网关
 
 ```powershell
-cd D:\IDEA_Project\init_env\auth-design-spec\services\agent-gateway
+cd D:\IDEA_Project\init_env\auth-design-spec\services\auth-gateway
 mvn spring-boot:run
 ```
 
@@ -71,23 +71,23 @@ mvn spring-boot:run
 ## 5. 关键端口
 
 - `policy-center`: `18081`
-- `agent-gateway`: `18080`
+- `auth-gateway`: `18080`
 - `demo-business-agent`: `18082`
 
 ## 6. real profile 说明
 
-当前只有 `agent-gateway` 区分 `mock` 和 `real` 两套 provider 实现。
+当前只有 `auth-gateway` 区分 `mock` 和 `real` 两套 provider 实现。
 
 `real` 相关实现位于：
 
-- `agent-gateway/src/main/java/com/huawei/it/roma/liveeda/auth/client/idaas/RealIdaasAuthorizeSupport.java`
-- `agent-gateway/src/main/java/com/huawei/it/roma/liveeda/auth/client/idaas/RealIdaasTokenClient.java`
-- `agent-gateway/src/main/java/com/huawei/it/roma/liveeda/auth/client/iam/RealIamAssumeAgentTokenClient.java`
-- `agent-gateway/src/main/java/com/huawei/it/roma/liveeda/auth/client/iam/RealIamResourceTokenClient.java`
+- `auth-gateway/src/main/java/com/huawei/it/roma/liveeda/auth/client/idaas/RealIdaasAuthorizeSupport.java`
+- `auth-gateway/src/main/java/com/huawei/it/roma/liveeda/auth/client/idaas/RealIdaasTokenClient.java`
+- `auth-gateway/src/main/java/com/huawei/it/roma/liveeda/auth/client/iam/RealIamAssumeAgentTokenClient.java`
+- `auth-gateway/src/main/java/com/huawei/it/roma/liveeda/auth/client/iam/RealIamResourceTokenClient.java`
 
 默认配置文件：
 
-- `agent-gateway/src/main/resources/application.yml`
+- `auth-gateway/src/main/resources/application.yml`
 
 当前默认：
 
@@ -96,20 +96,20 @@ mvn spring-boot:run
 如果要切换到 `real`，可以这样启动：
 
 ```powershell
-cd D:\IDEA_Project\init_env\auth-design-spec\services\agent-gateway
+cd D:\IDEA_Project\init_env\auth-design-spec\services\auth-gateway
 mvn spring-boot:run "-Dspring-boot.run.profiles=real"
 ```
 
 或：
 
 ```powershell
-cd D:\IDEA_Project\init_env\auth-design-spec\services\agent-gateway
+cd D:\IDEA_Project\init_env\auth-design-spec\services\auth-gateway
 mvn spring-boot:run "-Dspring-boot.run.arguments=--spring.profiles.active=real"
 ```
 
 ## 7. 切换到 real 前至少要补齐的配置
 
-需要把 `agent-gateway/src/main/resources/application.yml` 中以下配置替换成真实值，或拆到 `application-real.yml`：
+需要把 `auth-gateway/src/main/resources/application.yml` 中以下配置替换成真实值，或拆到 `application-real.yml`：
 
 - `providers.idaas.authorize-url`
 - `providers.idaas.token-url`

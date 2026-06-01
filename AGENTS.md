@@ -26,7 +26,7 @@
 
 - 修改代码前先看相关模块现有结构和测试，不要凭记忆改。
 - 保持三个服务的边界：
-  - `services/agent-gateway`：Agent 网关。
+  - `services/auth-gateway`：Agent 网关。
   - `services/policy-center`：策略中心。
   - `services/demo-business-agent`：演示业务 Agent。
 - `IDaaS`、`IAM`、`MCP` 外部系统本地默认可以 mock；真实联调用 `real` profile 和配置切换。
