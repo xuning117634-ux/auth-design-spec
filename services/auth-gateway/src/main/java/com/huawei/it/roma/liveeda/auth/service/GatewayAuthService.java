@@ -5,7 +5,7 @@ import com.huawei.it.roma.liveeda.auth.client.idaas.IdaasAuthorizeSupport;
 import com.huawei.it.roma.liveeda.auth.client.idaas.IdaasTokenClient;
 import com.huawei.it.roma.liveeda.auth.client.iam.IamAssumeAgentTokenClient;
 import com.huawei.it.roma.liveeda.auth.client.iam.IamResourceTokenClient;
-import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.config.AuthGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.config.IdaasProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.BaseLoginResult;
@@ -42,7 +42,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class GatewayAuthService {
 
-    private final AgentGatewayProperties properties;
+    private final AuthGatewayProperties properties;
     private final IdaasProperties idaasProperties;
     private final AgentManagementClient agentManagementClient;
     private final PendingBaseLoginStore pendingBaseLoginStore;

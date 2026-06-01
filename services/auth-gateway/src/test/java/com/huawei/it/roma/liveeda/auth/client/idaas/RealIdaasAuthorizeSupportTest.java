@@ -2,7 +2,7 @@ package com.huawei.it.roma.liveeda.auth.client.idaas;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.config.AuthGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.config.IdaasProperties;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -48,8 +48,8 @@ class RealIdaasAuthorizeSupportTest {
         assertEquals("http://localhost:18080/gw/auth/consent/callback", params.get("redirect_uri"));
     }
 
-    private AgentGatewayProperties gatewayProperties() {
-        AgentGatewayProperties properties = new AgentGatewayProperties();
+    private AuthGatewayProperties gatewayProperties() {
+        AuthGatewayProperties properties = new AuthGatewayProperties();
         properties.setSelfBaseUrl("http://localhost:18080");
         return properties;
     }

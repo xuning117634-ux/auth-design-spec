@@ -3,7 +3,7 @@ package com.huawei.it.roma.liveeda.auth.service;
 import com.huawei.it.roma.liveeda.auth.client.AgentManagementClient;
 import com.huawei.it.roma.liveeda.auth.client.PolicyCenterClient;
 import com.huawei.it.roma.liveeda.auth.client.PolicyResolutionResult;
-import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.config.AuthGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AgentRegistryEntry;
 import com.huawei.it.roma.liveeda.auth.domain.PendingAuthTransaction;
 import com.huawei.it.roma.liveeda.auth.store.PendingAuthTransactionStore;
@@ -30,7 +30,7 @@ public class ResourceTokenService {
     private final PolicyCenterClient policyCenterClient;
     private final PendingAuthTransactionStore pendingAuthTransactionStore;
     private final ReturnUrlValidator returnUrlValidator;
-    private final AgentGatewayProperties properties;
+    private final AuthGatewayProperties properties;
     private final IdGenerator idGenerator;
 
     public ResourceTokenResponse issueResourceToken(ResourceTokenRequest request) {

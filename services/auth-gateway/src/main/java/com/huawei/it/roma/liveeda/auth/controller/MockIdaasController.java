@@ -1,7 +1,7 @@
 package com.huawei.it.roma.liveeda.auth.controller;
 
 import com.huawei.it.roma.liveeda.auth.client.PolicyCenterClient;
-import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.config.AuthGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.domain.AuthorizedPermissionPoint;
 import com.huawei.it.roma.liveeda.auth.store.MockIdaasGrantStore;
 import com.huawei.it.roma.liveeda.auth.util.IdGenerator;
@@ -36,7 +36,7 @@ public class MockIdaasController {
 
     private final MockIdaasGrantStore mockIdaasGrantStore;
     private final PolicyCenterClient policyCenterClient;
-    private final AgentGatewayProperties properties;
+    private final AuthGatewayProperties properties;
     private final IdGenerator idGenerator;
 
     @GetMapping(value = "/authorize", produces = "text/html;charset=UTF-8")

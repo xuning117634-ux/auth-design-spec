@@ -6,9 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
-public class AgentGatewayApplication {
+public class AuthGatewayApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(AgentGatewayApplication.class, args);
+        SpringApplication.run(AuthGatewayApplication.class, args);
     }
 }

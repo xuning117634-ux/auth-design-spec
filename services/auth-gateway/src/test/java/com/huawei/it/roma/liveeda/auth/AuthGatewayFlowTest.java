@@ -34,7 +34,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("mock")
-class AgentGatewayFlowTest {
+class AuthGatewayFlowTest {
 
     private static final AuthorizedPermissionPoint CONTRACT_READ_PERMISSION =
             new AuthorizedPermissionPoint("erp:contract:r", "ERP 合同的可读权限");

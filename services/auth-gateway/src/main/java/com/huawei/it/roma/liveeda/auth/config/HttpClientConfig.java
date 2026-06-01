@@ -23,9 +23,9 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class HttpClientConfig {
 
-    private final AgentGatewayProperties properties;
+    private final AuthGatewayProperties properties;
 
-    public HttpClientConfig(AgentGatewayProperties properties) {
+    public HttpClientConfig(AuthGatewayProperties properties) {
         this.properties = properties;
     }
 

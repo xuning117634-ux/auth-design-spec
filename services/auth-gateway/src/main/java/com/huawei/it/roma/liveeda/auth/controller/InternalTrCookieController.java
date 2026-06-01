@@ -1,6 +1,6 @@
 package com.huawei.it.roma.liveeda.auth.controller;
 
-import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.config.AuthGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.service.ResourceCookieService;
 import com.huawei.it.roma.liveeda.auth.util.LogSanitizer;
 import com.huawei.it.roma.liveeda.auth.web.GatewayException;
@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalTrCookieController {
 
     private final ResourceCookieService resourceCookieService;
-    private final AgentGatewayProperties properties;
+    private final AuthGatewayProperties properties;
 
     @PostMapping("/resolve")
     public TrCookieResolveResponse resolve(

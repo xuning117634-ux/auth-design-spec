@@ -1,6 +1,6 @@
 package com.huawei.it.roma.liveeda.auth.client.idaas;
 
-import com.huawei.it.roma.liveeda.auth.config.AgentGatewayProperties;
+import com.huawei.it.roma.liveeda.auth.config.AuthGatewayProperties;
 import com.huawei.it.roma.liveeda.auth.config.IdaasProperties;
 import java.net.URI;
 import java.util.Map;
@@ -15,7 +15,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequiredArgsConstructor
 public class MockIdaasAuthorizeSupport implements IdaasAuthorizeSupport {
 
-    private final AgentGatewayProperties properties;
+    private final AuthGatewayProperties properties;
     private final IdaasProperties idaaSProperties;
 
     @Override

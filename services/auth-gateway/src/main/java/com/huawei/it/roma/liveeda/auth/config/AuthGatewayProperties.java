@@ -8,7 +8,7 @@ import org.springframework.validation.annotation.Validated;
 @Data
 @Validated
 @ConfigurationProperties(prefix = "gateway")
-public class AgentGatewayProperties {
+public class AuthGatewayProperties {
 
     @NotBlank
     private String selfBaseUrl;
