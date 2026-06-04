@@ -142,3 +142,36 @@ flowchart LR
     class AG,Agent,MCP,SC svc;
     class API api;
 ```
+
+```mermaid
+flowchart LR
+    Q["用户问题"] --> T["Task对象"]
+    T --> AG["Agent Gateway<br/>生成任务级Token"]
+    AG --> Token["Token对象<br/>taskId / userId / appName"]
+
+    Token --> Agent["Agent"]
+    Agent --> Req["MCP工具请求<br/>Token + 参数"]
+
+    Req --> MCP["MCP Gateway"]
+    MCP --> SC["策略中心"]
+    SC --> Policy["权限结果对象<br/>allowed=false<br/>reason=需要委托授权"]
+
+    Policy --> MCP
+    MCP --> Deny["授权提示对象<br/>DELEGATION_REQUIRED"]
+    Deny --> Agent
+    Agent --> Msg["用户提示<br/>请先配置委托权限"]
+    Msg --> Copilot["Web Copilot"]
+    Copilot --> User["用户"]
+
+    User --> Auth["授权操作<br/>配置委托策略"]
+    Auth --> SC
+    SC --> Delegation["委托策略对象<br/>allowedTags / dataRange / expiresAt"]
+
+    classDef obj fill:#fff7df,stroke:#b88720,stroke-width:1px,color:#111;
+    classDef svc fill:#eef3ff,stroke:#4f7db8,stroke-width:1px,color:#111;
+    classDef user fill:#eaf8ef,stroke:#4f9b68,stroke-width:1px,color:#111;
+
+    class Q,T,Token,Req,Policy,Deny,Msg,Auth,Delegation obj;
+    class AG,Agent,MCP,SC,Copilot svc;
+    class User user;
+```
