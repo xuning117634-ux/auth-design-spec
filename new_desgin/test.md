@@ -1,53 +1,4 @@
-```mermaid
-sequenceDiagram
-    actor User as 用户
-    participant FE as 业务前端
-    participant BFF as 业务后端/BFF
-    participant Proxy as Agent Traffic Proxy
-    participant Agent as 业务 Agent
-    participant GW as Agent 网关授权接口
-    participant IDaaS as IDaaS
-    participant IAM as IAM
 
-    User->>FE: 输入需要工具的问题
-    FE->>BFF: POST /chat/send
-    BFF->>Proxy: 转发 Agent 请求
-    Proxy->>Agent: 流控通过，转发请求
-
-    Agent->>Agent: 发现需要 MCP 工具
-    Agent->>Agent: 检查本地 TR 缓存
-
-    alt 无可用 TR
-        Agent-->>Proxy: 返回 AUTH_REQUIRED<br/>required_tools
-        Proxy-->>BFF: 透传 AUTH_REQUIRED
-        BFF->>GW: POST /gw/token/resource-token<br/>agent_id + required_tools + return_url + state
-        GW-->>BFF: redirect_url + request_id
-        BFF-->>FE: 返回 redirect_url
-        FE->>User: 跳转授权页
-
-        User->>IDaaS: 完成授权
-        IDaaS-->>GW: callback code
-        GW->>IAM: code -> Tc -> T1 -> TR
-        GW-->>FE: 回跳 return_url<br/>token_result_ticket
-
-        FE->>BFF: token_result_ticket
-        BFF->>GW: 换 TR
-        GW-->>BFF: 返回 TR
-        BFF->>BFF: 写入本地 tr_cache
-
-        FE->>BFF: 恢复原问题继续执行
-        BFF->>Proxy: 再次转发 Agent 请求
-        Proxy->>Agent: 转发请求
-        Agent-->>Proxy: 返回回答
-        Proxy-->>BFF: 返回回答
-        BFF-->>FE: 返回回答
-    else 有可用 TR
-        Agent-->>Proxy: 返回回答
-        Proxy-->>BFF: 返回回答
-        BFF-->>FE: 返回回答
-    end
-
-```
 
 ```mermaid
 sequenceDiagram
@@ -159,49 +110,35 @@ sequenceDiagram
         C-->>U: 11. 展示授权/确认入口
     end
 ```
-
 ```mermaid
 flowchart LR
-    UQ["用户问题对象<br/>question"] --> WC["Web Copilot<br/>创建 Task"]
-    WC --> TC["Task 上下文<br/>taskId / agentId / Cookie"]
+    Q["用户问题"] --> T["Task对象"]
+    T --> AG["Agent Gateway<br/>生成任务级Token"]
+    AG --> Token["Token对象<br/>taskId / userId / appName"]
 
-    TC --> AG["Agent Gateway<br/>Token / Session 管理"]
-    AG --> TK["任务级 Token<br/>taskId / sessionId / userId / appName"]
+    Token --> Agent["Agent"]
+    Agent --> Req["MCP工具请求<br/>Token + 参数"]
 
-    TK --> A["Agent<br/>只持有 Token<br/>不持有 Cookie"]
-    A --> TR["工具调用请求<br/>toolName + params + Token"]
+    Req --> MCP["MCP Gateway"]
+    MCP --> SC["策略中心"]
+    SC --> Policy["权限对象<br/>allowed=true<br/>dataRange"]
 
-    TR --> MCP["MCP Gateway<br/>工具鉴权 / 数据注入 / API 调用"]
+    Policy --> MCP
 
-    MCP --> SC["策略中心<br/>委托策略 / 工具标签 / 数据范围"]
-    SC --> PR["权限结果对象<br/>allowed = true<br/>dataRange"]
+    MCP -.-> AG
+    AG -.-> Cookie["Cookie对象"]
+    Cookie -.-> MCP
 
-    PR --> MCP
-    MCP --> AG
-    AG --> CK["Cookie 对象<br/>由 Agent Gateway 换取"]
+    MCP --> ApiReq["API请求对象<br/>Cookie + dataRange + 参数"]
+    ApiReq --> API["传统业务API"]
+    API --> Result["业务结果"]
+    Result --> Answer["最终回答"]
 
-    MCP --> APIREQ["API 请求对象<br/>Cookie + appName + dataRange + params"]
-    APIREQ --> API["传统业务 API"]
-    API --> R["业务结果对象"]
-    R --> MCP
-    MCP --> A
-    A --> ANS["最终回答"]
-    ANS --> WC
-    WC --> USER["用户看到答案"]
-
-    AG -.-> STORE1["Session/Token 存储"]
-    SC -.-> STORE2["策略/委托存储"]
-    MCP -.-> AUDIT["工具调用审计"]
-
-    classDef actor fill:#eef6ff,stroke:#4f7db8,stroke-width:1px,color:#111;
-    classDef gateway fill:#f7f1ff,stroke:#7a5ca8,stroke-width:1px,color:#111;
-    classDef object fill:#fff7df,stroke:#b88720,stroke-width:1px,color:#111;
+    classDef obj fill:#fff7df,stroke:#b88720,stroke-width:1px,color:#111;
+    classDef svc fill:#eef3ff,stroke:#4f7db8,stroke-width:1px,color:#111;
     classDef api fill:#eaf8ef,stroke:#4f9b68,stroke-width:1px,color:#111;
-    classDef store fill:#f3f3f3,stroke:#888,stroke-dasharray:4 3,color:#111;
 
-    class USER,UQ,WC,A actor;
-    class AG,MCP,SC gateway;
-    class TC,TK,TR,PR,CK,APIREQ,R,ANS object;
+    class Q,T,Token,Req,Policy,Cookie,ApiReq,Result,Answer obj;
+    class AG,Agent,MCP,SC svc;
     class API api;
-    class STORE1,STORE2,AUDIT store;
 ```
