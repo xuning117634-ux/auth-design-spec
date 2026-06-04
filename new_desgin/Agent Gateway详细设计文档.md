@@ -32,7 +32,7 @@
 
 ### 1.1 服务定位
 
-Agent Gateway是Agent人机委托机制的核心服务，负责Token生成、Session管理、Cookie换取、Agent注册管理和A2A路由。作为独立的微服务，Agent Gateway提供RESTful API供Web Copilot、MCP Gateway和策略中心调用。
+Agent Gateway是Agent人机委托机制的核心服务，负责Agent注册管理、Copilot到Agent的统一入口代理路由、A2A路由、Token生成、Session管理和Cookie换取。作为独立的微服务，Agent Gateway对Web Copilot暴露注册Agent的统一访问地址，对后端维护Agent真实地址和协议适配配置，运行时完成Cookie到任务级Token的转换、委托授权检查、Token注入和请求转发。
 
 ### 1.2 核心职责
 
@@ -41,6 +41,7 @@ Agent Gateway是Agent人机委托机制的核心服务，负责Token生成、Ses
 - Session管理：管理用户-Agent会话，存储Cookie和Session信息
 - Cookie换取：提供Cookie换取接口，支持MCP Gateway还原Cookie
 - Agent注册管理：管理Agent注册信息，维护Agent元数据
+- Agent入口代理路由：接收Copilot访问注册Agent的请求，完成授权、Token注入和真实Agent转发
 - A2A路由：支持Agent调用Agent的路由和委托链传递
 - 实时确认处理：处理实时确认请求，转发确认消息给用户
 - 审计日志记录：记录Token生成、Session管理、A2A调用等审计日志
@@ -50,6 +51,7 @@ Agent Gateway是Agent人机委托机制的核心服务，负责Token生成、Ses
 - 不负责工具调用鉴权（MCP Gateway职责）
 - 不负责委托权限验证（策略中心职责）
 - 不负责Cookie还原调用传统API（MCP Gateway职责）
+- 不要求业务Agent主动调用Token生成、Cookie换取、委托授权等网关内部API
 
 ### 1.3 服务依赖
 
@@ -107,6 +109,7 @@ Agent Gateway是Agent人机委托机制的核心服务，负责Token生成、Ses
 | P0-006 | Agent注册 | 支持Agent注册，维护Agent元数据 | HIGH |
 | P0-007 | Agent查询 | 支持查询Agent信息，供策略中心和MCP Gateway调用 | HIGH |
 | P0-008 | Token缓存管理 | 支持Token缓存，提升验证性能 | HIGH |
+| P0-009 | Agent入口代理路由 | 代理Copilot到注册Agent的调用，完成Cookie转Token、委托授权和Token注入 | HIGH |
 
 #### P1重要功能
 
@@ -728,6 +731,9 @@ public class AgentRegistration {
     private String agentName;
     private AgentType agentType;
     private String agentDescription;
+    private String agentEndpoint;
+    private String gatewayEndpoint;
+    private ProtocolAdapterConfig protocolAdapter;
     private List<String> recommendedScenarios;
     private AgentStatus status;
     private Date createTime;
@@ -742,6 +748,14 @@ public enum AgentType {
 public enum AgentStatus {
     ACTIVE, INACTIVE, DELETED
 }
+
+@Data
+public class ProtocolAdapterConfig {
+    private RequestMode requestMode;
+    private TokenInjectionMode tokenInjection;
+    private String contextHeaderName;
+    private Map<String, String> headerMappings;
+}
 ```
 
 **接口设计**：
@@ -755,12 +769,19 @@ Request Body:
   "agentName": "数据集成Agent",
   "agentType": "DATA_INTEGRATION",
   "agentDescription": "负责数据集成任务的Agent",
+  "agentEndpoint": "http://agent-001.internal:8080/chat",
+  "protocolAdapter": {
+    "requestMode": "HTTP_JSON",
+    "tokenInjection": "AUTHORIZATION_BEARER",
+    "contextHeaderName": "X-Agent-Task-Context"
+  },
   "recommendedScenarios": ["数据源管理", "集成任务配置"]
 }
 
 Response:
 {
   "agentId": "agent-001",
+  "gatewayEndpoint": "https://agent-gateway.example.com/agents/agent-001/invoke",
   "status": "ACTIVE",
   "createTime": "2026-06-04T10:00:00Z"
 }
@@ -824,6 +845,7 @@ Response:
   "agentName": "数据集成Agent",
   "agentType": "DATA_INTEGRATION",
   "agentDescription": "负责数据集成任务的Agent",
+  "gatewayEndpoint": "https://agent-gateway.example.com/agents/agent-001/invoke",
   "recommendedScenarios": ["数据源管理", "集成任务配置"],
   "status": "ACTIVE",
   "createTime": "2026-06-04T10:00:00Z"
@@ -948,18 +970,111 @@ Response:
 
 ---
 
+#### 3.1.9 P0-009：Agent入口代理路由
+
+**功能描述**：
+对Web Copilot暴露注册Agent的统一入口，代理用户请求到Agent真实服务。运行时由Agent Gateway完成Cookie到任务级Token的转换、委托授权检查、Token注入、协议适配和路由转发，避免Copilot直接感知Agent真实地址，也避免Agent主动调用Token生成等网关内部API。
+
+**业务规则**：
+1. Copilot配置的Agent调用地址必须是Agent Gateway返回的gatewayEndpoint
+2. Agent真实agentEndpoint只保存在Agent注册信息中，不暴露给浏览器端
+3. 网关接收请求后必须校验用户Session和Cookie有效性
+4. 网关必须检查目标Agent注册状态为ACTIVE
+5. 网关必须检查用户对目标Agent的委托授权；未授权时通过Copilot触发授权流程
+6. 授权完成后，网关生成与Task绑定的Token，并注入到转发给Agent的请求中
+7. Agent不直接调用Token生成、Cookie换取、委托授权等网关内部API
+8. 对OpenClaw等开源Agent，优先通过协议适配器、请求头映射或Sidecar方式接入，保持Agent主体独立演进
+
+**接口设计**：
+```
+POST /agents/{agentId}/invoke
+Content-Type: application/json
+Cookie: IDaaS_SSO_Cookie_Value
+
+Request Body:
+{
+  "taskId": "task-uuid-001",
+  "sessionId": "session-uuid-001",
+  "message": "查询当前组织的数据源",
+  "context": {
+    "source": "web-copilot"
+  }
+}
+
+Forward To Agent:
+POST {agentEndpoint}
+Authorization: Bearer {taskToken}
+X-Agent-Task-Context: {"taskId":"task-uuid-001","agentId":"agent-001","sessionId":"session-uuid-001"}
+
+Response:
+{
+  "taskId": "task-uuid-001",
+  "agentId": "agent-001",
+  "result": {
+    "type": "agent_response",
+    "content": "..."
+  }
+}
+```
+
+**流程设计**：
+```
+流程1：Copilot到Agent代理调用流程
+1. Copilot根据注册Agent列表获取gatewayEndpoint
+2. 用户在Copilot提交任务请求
+3. Copilot调用/agents/{agentId}/invoke，请求携带用户Cookie和任务上下文
+4. Agent Gateway解析Cookie并校验Session
+5. Agent Gateway查询Agent注册信息，获取agentEndpoint和protocolAdapter
+6. Agent Gateway查询策略中心，检查用户到目标Agent的委托授权
+7. 如需授权，Agent Gateway通过Copilot触发授权/确认，授权完成后继续
+8. Agent Gateway生成任务级Token，绑定taskId、sessionId、userId、agentId和委托链
+9. Agent Gateway按protocolAdapter注入Token和任务上下文
+10. Agent Gateway转发原始用户请求到agentEndpoint
+11. Agent执行业务逻辑，调用MCP工具时携带网关注入的Token
+12. Agent返回结果给Agent Gateway
+13. Agent Gateway返回结果给Copilot
+14. 任务结束后Token失效，记录审计日志
+
+性能要求：
+- 入口代理额外延迟：< 30ms（不含目标Agent处理时间）
+- 授权已存在场景成功率：> 99.9%
+- Agent真实地址不出现在浏览器URL、前端配置或响应体中
+```
+
+**测试用例**：
+```
+测试用例1：Copilot通过网关调用已授权Agent
+- 输入：有效Cookie、ACTIVE Agent、已有委托授权
+- 预期：网关生成Token并转发到真实Agent，Agent返回结果
+
+测试用例2：Copilot调用未授权Agent
+- 输入：有效Cookie、ACTIVE Agent、无委托授权
+- 预期：网关触发授权流程，授权完成后继续转发
+
+测试用例3：Agent真实地址变更
+- 输入：Agent更新agentEndpoint，Copilot仍调用gatewayEndpoint
+- 预期：Copilot无感知，网关按新地址转发成功
+
+测试用例4：开源Agent轻量接入
+- 输入：Agent只支持标准Authorization Header
+- 预期：网关通过protocolAdapter注入Bearer Token，Agent无需调用网关Token API
+```
+
+---
+
 ### 3.2 P1重要功能详细设计
 
 #### 3.2.1 P1-001：A2A路由
 
 **功能描述**：
-支持Agent调用Agent的路由和委托链传递。
+支持Agent通过Agent Gateway调用其他注册Agent。Agent Gateway验证调用方Token和A2A委托权限，生成被调Agent的任务级Token，并按被调Agent注册信息代理转发请求，保证调用方不直接依赖目标Agent真实地址。
 
 **业务规则**：
 1. A2A调用必须验证委托链
 2. A2A调用必须生成新的Token（包含完整委托链）
 3. A2A调用必须记录审计日志
 4. A2A调用支持多级委托链传递
+5. A2A调用方只能访问Agent Gateway统一入口，不能直接访问被调Agent真实agentEndpoint
 
 **接口设计**：
 ```
@@ -971,13 +1086,21 @@ Request Body:
   "callerAgentId": "agent-001",
   "calleeAgentId": "agent-002",
   "callerTokenId": "token-uuid-001",
-  "delegationId": "del-uuid-002"
+  "delegationId": "del-uuid-002",
+  "payload": {
+    "taskDescription": "将数据源列表同步到IDATA",
+    "inputData": {}
+  }
 }
 
 Response:
 {
-  "calleeTokenId": "token-uuid-002",
-  "calleeTokenValue": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "routeId": "route-uuid-001",
+  "calleeAgentId": "agent-002",
+  "result": {
+    "type": "agent_response",
+    "content": "..."
+  },
   "delegationChain": [
     {
       "from": "user:l00867517",
@@ -1004,12 +1127,15 @@ Response:
 6. 验证delegationId有效性（callerAgentId委托给calleeAgentId）
 7. 构建新的委托链（追加新的委托关系）
 8. 生成calleeToken（包含完整委托链）
-9. 缓存calleeToken到Redis
-10. 记录审计日志到Elasticsearch
-11. 返回calleeToken ID和Token Value
+9. 查询calleeAgent注册信息，获取agentEndpoint和protocolAdapter
+10. 按protocolAdapter注入calleeToken和任务上下文
+11. 代理转发payload到calleeAgent真实服务
+12. 接收calleeAgent响应
+13. 记录审计日志到Elasticsearch
+14. 返回calleeAgent执行结果给callerAgent
 
 性能要求：
-- A2A路由延迟：< 30ms
+- A2A路由额外延迟：< 30ms（不含被调Agent处理时间）
 - A2A路由吞吐量：> 500 TPS
 ```
 
@@ -1017,7 +1143,7 @@ Response:
 ```
 测试用例1：正常A2A路由
 - 输入：有效的A2A路由参数
-- 预期：路由成功，返回calleeToken
+- 预期：路由成功，网关生成calleeToken并代理调用calleeAgent，返回执行结果
 
 测试用例2：callerAgent不存在
 - 输入：不存在的callerAgentId
@@ -1201,6 +1327,9 @@ CREATE TABLE agent_registration (
     agent_name VARCHAR(128) NOT NULL COMMENT 'Agent名称',
     agent_type VARCHAR(64) NOT NULL COMMENT 'Agent类型',
     agent_description VARCHAR(512) COMMENT 'Agent描述',
+    agent_endpoint VARCHAR(512) NOT NULL COMMENT 'Agent真实服务地址',
+    gateway_endpoint VARCHAR(512) NOT NULL COMMENT 'Agent Gateway暴露入口',
+    protocol_adapter JSON COMMENT '协议适配与Token注入配置',
     recommended_scenarios JSON COMMENT '推荐场景',
     status VARCHAR(32) NOT NULL COMMENT '状态：ACTIVE/INACTIVE/DELETED',
     create_time DATETIME NOT NULL COMMENT '创建时间',
@@ -1257,9 +1386,10 @@ CREATE TABLE confirmation_record (
 | API-008 | /api/v1/agents/register | POST | Agent注册 | P0-006 |
 | API-009 | /api/v1/agents/{agentId} | GET | 查询Agent详情 | P0-007 |
 | API-010 | /api/v1/agents | GET | 查询Agent列表 | P0-007 |
-| API-011 | /api/v1/a2a/route | POST | A2A路由 | P1-001 |
-| API-012 | /api/v1/confirmations/request | POST | 实时确认请求 | P1-002 |
-| API-013 | /api/v1/confirmations/respond | POST | 实时确认响应 | P1-003 |
+| API-011 | /agents/{agentId}/invoke | POST | Copilot到Agent代理调用 | P0-009 |
+| API-012 | /api/v1/a2a/route | POST | A2A代理路由 | P1-001 |
+| API-013 | /api/v1/confirmations/request | POST | 实时确认请求 | P1-002 |
+| API-014 | /api/v1/confirmations/respond | POST | 实时确认响应 | P1-003 |
 
 ---
 

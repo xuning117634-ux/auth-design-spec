@@ -88,7 +88,8 @@
 - 实时确认机制，平衡安全与体验
 
 **可扩展性目标**：
-- 新Agent注册无需修改代码
+- 新Agent通过注册接入网关，Copilot只配置网关暴露的Agent入口
+- Agent不直接调用Token生成、委托授权等网关内部API，运行时由网关代理转发
 - 新工具注册自动同步
 - 策略模板库可扩展
 - 多级A2A支持
@@ -118,6 +119,7 @@
 │  - Session会话管理（保活、Cookie存储）                         │
 │  - 委托链构建与传递                                            │
 │  - Agent注册管理                                               │
+│  - Copilot→Agent入口代理路由                                    │
 │  - A2A调用路由                                                 │
 └─────────────────────────────────────────────────────────────┘
                             ↓
@@ -151,11 +153,13 @@
 ### 3.2 整体调用流程
 
 ```
-用户 → IDaaS SSO登录 → Web Copilot → Agent Gateway
+用户 → IDaaS SSO登录 → Web Copilot → Agent Gateway（Agent统一入口）
                                         ↓
                                    Cookie转Token
                                         ↓
-                                   生成Task级Token
+                            委托授权检查/必要时发起授权
+                                        ↓
+                          生成Task级Token并转发到目标Agent
                                         ↓
                                    Agent执行任务
                                         ↓
@@ -337,6 +341,12 @@ Agent注册信息，包含Agent身份、能力声明、推荐策略。
   "agentDescription": "负责查询B2B数据源、连接器、数据对象",
   "agentVersion": "1.0.0",
   "agentEndpoint": "http://agent-001.internal:8080",
+  "gatewayEndpoint": "https://agent-gateway.example.com/agents/agent-001/invoke",
+  "protocolAdapter": {
+    "requestMode": "HTTP_JSON",
+    "tokenInjection": "AUTHORIZATION_BEARER",
+    "contextHeader": "X-Agent-Task-Context"
+  },
 
   "capabilities": {
     "supportedTags": ["B2B", "READ_ONLY", "DATA_ACCESS"],
@@ -368,6 +378,9 @@ Agent注册信息，包含Agent身份、能力声明、推荐策略。
 **字段说明**：
 - `agentId`: Agent唯一标识
 - `agentType`: Agent类型（DATA_QUERY、DATA_SYNC、TASK_MANAGE等）
+- `agentEndpoint`: Agent真实服务地址，只由Agent Gateway调用，不暴露给Copilot前端
+- `gatewayEndpoint`: Agent Gateway对Copilot暴露的统一调用地址
+- `protocolAdapter`: 网关转发到Agent时的协议适配和Token注入方式
 - `capabilities`: Agent能力声明
 - `recommendedPolicy`: 推荐策略模板
 - `defaultPolicy`: 默认策略（无委托时应用）
@@ -377,9 +390,9 @@ Agent注册信息，包含Agent身份、能力声明、推荐策略。
 
 ## 5. 核心流程设计
 
-### 5.1 流程1：Cookie转Token（任务级Token生成）
+### 5.1 流程1：Copilot通过Agent Gateway调用Agent
 
-**触发场景**：用户在Copilot提交任务请求
+**触发场景**：用户在Copilot提交任务请求。Copilot配置的是Agent Gateway上注册Agent对应的统一入口，而不是Agent真实服务地址。
 
 **详细步骤**：
 
@@ -391,28 +404,37 @@ Agent注册信息，包含Agent身份、能力声明、推荐策略。
 
 2. **用户提交任务请求**：
    - 用户在Copilot输入："查询当前组织的数据源"
+   - Copilot根据已注册Agent列表选择目标agentId
+   - Copilot向Agent Gateway统一入口发送请求，例如：`POST /agents/{agentId}/invoke`
    - Copilot创建Task：
      - taskId：UUID
      - sessionId：关联当前Session
      - request：用户原始请求
      - status：RUNNING
 
-3. **Agent Gateway生成Token**：
+3. **Agent Gateway拦截并完成运行时准备**：
    - 解析Session，提取用户身份和Cookie
    - 检查Agent注册状态
+   - 根据agentId查询真实agentEndpoint和协议适配配置
+   - 查询策略中心，检查用户是否已对目标Agent完成委托授权
+   - 如果尚未授权或权限不足，网关通过Copilot触发授权/确认流程，授权完成后继续执行
    - 生成Token：
      - tokenId：UUID
      - taskId：关联Task
      - sessionId：关联Session
      - userId、agentId：从Session提取
      - environmentContext：从用户身份提取（appName等）
-     - delegationChain：查询已有委托或初始为空
+     - delegationChain：包含用户到目标Agent的委托关系
      - status：ACTIVE
 
-4. **返回Token给Agent**：
-   - Agent Gateway返回Token给Agent
-   - Agent将Token存储在任务上下文
-   - 后续所有MCP工具调用都携带此Token
+4. **Agent Gateway代理转发到目标Agent**：
+   - Agent Gateway不把Token生成API暴露给Copilot或Agent编排使用
+   - Agent Gateway按注册配置把用户原始请求转发到agentEndpoint
+   - 转发时注入任务级Token和上下文，例如：
+     - `Authorization: Bearer <task_token>`
+     - `X-Agent-Task-Context: {"taskId":"task-001","agentId":"agent-001"}`
+   - 对OpenClaw等开源Agent，可通过网关适配器把Token注入到其已有认证头或任务上下文字段，尽量保持Agent主体独立演进
+   - Agent只需要按约定消费运行时凭证，后续MCP工具调用携带该Token，不需要主动调用Agent Gateway的Token生成API
 
 5. **任务执行过程**：
    - Agent调用多个MCP工具（携带同一Token）
@@ -429,6 +451,9 @@ Agent注册信息，包含Agent身份、能力声明、推荐策略。
 - Token与Task绑定，任务级生命周期
 - Cookie只在Agent Gateway使用，不传递到Agent或MCP Gateway
 - Token包含环境维度，自动注入到工具参数
+- Copilot前端与Agent真实地址解耦，只访问Agent Gateway上的注册Agent入口
+- Agent与网关内部API解耦，不直接编排Token生成、Cookie换取、委托授权等接口
+- 对开源Agent优先采用网关协议适配、请求头注入、Sidecar/Adapter等轻量方式接入
 - 任务结束立即失效，无需刷新机制
 
 ### 5.2 流程2：MCP工具调用鉴权
@@ -748,10 +773,12 @@ Agent注册信息，包含Agent身份、能力声明、推荐策略。
 
 2. **Agent A决定调用Agent B**：
    - Agent A分析任务：需要同步数据
-   - Agent A查询Agent注册表：找到Agent B
-   - Agent A准备调用Agent B
+   - Agent A根据任务上下文选择目标Agent ID（agent-002）
+   - Agent A准备通过Agent Gateway调用Agent B，不直接访问Agent B真实地址
 
 3. **Agent A向Agent Gateway发起A2A调用**：
+   - Agent A调用的仍然是Agent Gateway上的目标Agent入口，或统一A2A代理接口
+   - Agent A不直接访问Agent B真实地址
    - Agent A发送请求：
      ```json
      {
@@ -786,8 +813,9 @@ Agent注册信息，包含Agent身份、能力声明、推荐策略。
      - environmentContext：继承Agent A的环境维度
 
 6. **Agent Gateway调用Agent B**：
+   - Agent Gateway根据Agent B注册信息找到真实agentEndpoint
    - Agent Gateway转发请求给Agent B
-   - Header包含Agent B的Token
+   - Header包含Agent B的Token和任务上下文
 
 7. **Agent B调用MCP工具**：
    - Agent B调用datasource_create工具（写入操作）
@@ -801,6 +829,7 @@ Agent注册信息，包含Agent身份、能力声明、推荐策略。
    - Agent B完成同步任务
    - 返回结果给Agent Gateway
    - Agent Gateway转发给Agent A
+   - Agent A不需要感知Agent B真实部署地址变化
 
 9. **Agent A返回最终结果给用户**：
    - Agent A整合查询结果和同步结果
@@ -1599,8 +1628,9 @@ CREATE TABLE tool_metadata (
 - POST /agent/register：Agent注册
 - PUT /agent/update：Agent更新
 - DELETE /agent/unregister：Agent注销
-- POST /token/generate：生成Token
-- POST /agent/call：A2A调用
+- POST /agents/{agentId}/invoke：Copilot到Agent代理调用
+- POST /api/v1/a2a/route：A2A代理调用
+- POST /token/generate：内部Token生成接口（不由Copilot或Agent直接编排）
 - POST /cookie/exchange：Cookie换取（MCP Gateway调用）
 - GET /agent/health：Agent健康检查
 
@@ -1673,18 +1703,21 @@ delegation:
 **测试步骤**：
 1. 用户在Copilot输入："查询当前组织的数据源"
 2. Copilot创建Task（taskId=task-001）
-3. Copilot发送请求到Agent Gateway（包含Cookie、agentId）
+3. Copilot发送请求到Agent Gateway上的Agent统一入口（包含Cookie、agentId）
 4. Agent Gateway解析Cookie，提取用户身份
-5. Agent Gateway生成Token（tokenId=token-001）
-6. Agent Gateway返回Token给Agent
+5. Agent Gateway检查Agent注册信息和委托授权状态
+6. Agent Gateway生成Token（tokenId=token-001）
+7. Agent Gateway将原始任务请求、Token和任务上下文转发给真实Agent地址
 
 **预期结果**：
 - Token生成成功
+- Agent真实地址未暴露给Copilot
 - Token包含正确的用户身份（userId=l00867517）
 - Token包含正确的Agent身份（agentId=agent-001）
 - Token包含正确的环境维度（appName=C00001-O0023）
 - Token状态为ACTIVE
 - Token与Task绑定（taskId=task-001）
+- Agent不需要调用Agent Gateway的Token生成API
 
 **验证方法**：
 - 检查Token数据结构完整性
@@ -2056,12 +2089,12 @@ delegation:
 - Agent B已注册
 
 **测试步骤**：
-1. Agent A调用Agent Gateway：POST /agent/call（targetAgentId=agent-002）
+1. Agent A调用Agent Gateway：POST /api/v1/a2a/route（calleeAgentId=agent-002）
 2. Agent Gateway解析Agent A的Token
 3. Agent Gateway检查A2A权限
 4. Agent Gateway构建委托链：user→agent-001→agent-002
 5. Agent Gateway生成Agent B的Token
-6. Agent Gateway调用Agent B
+6. Agent Gateway根据Agent B注册信息代理调用Agent B
 7. Agent B调用MCP工具（携带Agent B的Token）
 8. MCP Gateway解析委托链
 9. MCP Gateway鉴权通过
@@ -2088,7 +2121,7 @@ delegation:
 - A2A权限：enabled=false
 
 **测试步骤**：
-1. Agent A调用Agent Gateway：POST /agent/call
+1. Agent A调用Agent Gateway：POST /api/v1/a2a/route
 2. Agent Gateway解析Agent A的Token
 3. Agent Gateway检查A2A权限
 4. A2A权限不足
@@ -3827,7 +3860,7 @@ L3存储：MySQL数据库
 1. Token生成时，加密Cookie
 2. 加密后存储到Redis：Key=tokenId, Value=encrypted_cookie
 3. 设置过期时间：与Token过期时间一致
-4. 返回Token给Agent
+4. 由Agent Gateway在代理转发请求时注入Token给Agent
 
 解密流程：
 1. Agent调用工具，传入Token
